@@ -1,0 +1,10 @@
+{
+  "apps": [
+    {
+      "id": "w7i1dbqnlylp",
+      "name": "Stock Tracker",
+      "folder": "stock-tracker",
+      "description": "App pushed from SlopOS"
+    }
+  ]
+}
