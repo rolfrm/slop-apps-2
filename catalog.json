@@ -17,6 +17,12 @@
       "name": "Time Zone Converter",
       "folder": "time-zone-converter",
       "description": "App pushed from SlopOS"
+    },
+    {
+      "id": "jotj1o09fg1n",
+      "name": "Chess",
+      "folder": "chess",
+      "description": "App pushed from SlopOS"
     }
   ]
 }
