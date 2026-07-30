@@ -1,0 +1,6 @@
+{
+  "name": "Time Zone Converter",
+  "description": "Convert time across multiple time zones. Enter a time in one zone and see it in many others at once.",
+  "authenticated": false,
+  "tags": ["time", "productivity", "travel"]
+}
