@@ -5,6 +5,12 @@
       "name": "Sudoku",
       "folder": "stock-tracker",
       "description": "App pushed from SlopOS"
+    },
+    {
+      "id": "095lmkb83p5y",
+      "name": "Sudoku",
+      "folder": "sudoku",
+      "description": "App pushed from SlopOS"
     }
   ]
 }
