@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/svg+xml" href="./icon.svg">
+  <title>Stock Tracker</title>
+  <script src="/slop-os.js"></script>
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    * { box-sizing: border-box; }
+    :root[data-mode="dark"] {
+      --sl-wallpaper: radial-gradient(circle at top left, rgba(56,189,248,0.12), transparent 34%),
+        linear-gradient(180deg, #0a1320 0%, #060b12 100%);
+    }
+    :root[data-mode="light"] {
+      --sl-wallpaper: radial-gradient(circle at top left, color-mix(in srgb, var(--sl-accent, #1f6bd0) 12%, transparent), transparent 34%),
+        var(--sl-surface, #f5f8fc);
+    }
+    body {
+      margin: 0; min-height: 100vh; padding: 20px;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    .app { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+
+    .search-wrap { position: relative; }
+    .search-wrap input {
+      width: 100%; padding: 12px 16px;
+      border-radius: var(--sl-radius, 12px);
+      background: var(--sl-raised, rgba(15,23,42,0.76));
+      border: 1px solid var(--sl-border, rgba(125,211,252,0.18));
+      color: var(--sl-text, #e0e8f0); font-size: 15px; outline: none;
+      transition: border-color 0.2s;
+    }
+    .search-wrap input:focus { border-color: var(--sl-accent, #38bdf8); }
+    .search-wrap input::placeholder { color: var(--sl-text-muted, #64748b); }
+
+    .dropdown {
+      position: absolute; top: 100%; left: 0; right: 0; z-index: 10;
+      background: var(--sl-raised, rgba(15,23,42,0.97));
+      border: 1px solid var(--sl-border, rgba(125,211,252,0.18));
+      border-radius: var(--sl-radius, 12px);
+      margin-top: 4px; max-height: 280px; overflow-y: auto; display: none;
+    }
+    .dropdown.open { display: block; }
+    .dropdown-item {
+      padding: 10px 16px; cursor: pointer; display: flex; justify-content: space-between;
+      align-items: center; gap: 12px;
+      border-bottom: 1px solid var(--sl-border-soft, rgba(148,163,184,0.08));
+      transition: background 0.15s;
+    }
+    .dropdown-item:last-child { border-bottom: none; }
+    .dropdown-item:hover { background: var(--sl-border-soft, rgba(148,163,184,0.08)); }
+    .dropdown-item .sym { font-weight: 600; color: var(--sl-text, #e0e8f0); white-space: nowrap; }
+    .dropdown-item .name { font-size: 13px; color: var(--sl-text-muted, #94a3b8); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex:1; }
+    .dropdown-item .exch { font-size: 11px; color: var(--sl-accent, #38bdf8); white-space: nowrap; }
+
+    .watchlist { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .watchlist-label { font-size: 12px; color: var(--sl-text-muted, #94a3b8); text-transform: uppercase; letter-spacing: 0.05em; }
+    .chip {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 12px; border-radius: 999px;
+      font-size: 13px; font-weight: 500;
+      background: var(--sl-raised, rgba(12,74,110,0.32));
+      border: 1px solid var(--sl-border, rgba(125,211,252,0.18));
+      color: var(--sl-text, #e0e8f0);
+      transition: all 0.15s;
+    }
+    .chip .remove {
+      width: 16px; height: 16px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; line-height: 1; cursor: pointer;
+      background: rgba(255,255,255,0.15); opacity: 0.7; transition: opacity 0.15s;
+    }
+    .chip .remove:hover { opacity: 1; background: rgba(255,80,80,0.4); }
+
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 14px;
+    }
+
+    .stock-card {
+      padding: 16px;
+      border-radius: var(--sl-radius, 14px);
+      background: var(--sl-raised, rgba(15,23,42,0.76));
+      border: 1px solid var(--sl-border-soft, rgba(148,163,184,0.12));
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .stock-card .card-header {
+      display: flex; justify-content: space-between; align-items: flex-start;
+    }
+    .stock-card .card-header .info { min-width: 0; }
+    .stock-card .symbol { font-size: 16px; font-weight: 700; color: var(--sl-text, #e0e8f0); letter-spacing: -0.01em; }
+    .stock-card .name { font-size: 12px; color: var(--sl-text-muted, #94a3b8); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .stock-card .price-block { text-align: right; }
+    .stock-card .price { font-size: 18px; font-weight: 700; color: var(--sl-text, #e0e8f0); }
+    .stock-card .change { font-size: 13px; font-weight: 500; }
+    .up { color: var(--sl-success, #34d399); }
+    .down { color: var(--sl-danger, #f87171); }
+    .stock-card .chart-wrap { position: relative; height: 160px; }
+    .stock-card .card-footer { display: flex; justify-content: space-between; align-items: center; }
+    .stock-card .last-date { font-size: 11px; color: var(--sl-text-muted, #64748b); }
+    .stock-card .remove-btn {
+      background: none; border: 1px solid var(--sl-border-soft, rgba(148,163,184,0.15));
+      color: var(--sl-text-muted, #94a3b8); font-size: 11px; padding: 4px 10px;
+      border-radius: 6px; cursor: pointer; transition: all 0.15s;
+    }
+    .stock-card .remove-btn:hover { color: var(--sl-danger, #f87171); border-color: var(--sl-danger, #f87171); }
+
+    .empty-state {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 64px 24px; text-align: center;
+    }
+    .empty-state svg { width: 64px; height: 64px; margin-bottom: 16px; opacity: 0.5; }
+    .empty-state h3 { margin: 0 0 8px; color: var(--sl-text, #e0e8f0); font-size: 18px; }
+    .empty-state p { margin: 0; color: var(--sl-text-muted, #94a3b8); font-size: 14px; }
+
+    .loading-card {
+      padding: 16px; border-radius: var(--sl-radius, 14px);
+      background: var(--sl-raised, rgba(15,23,42,0.76));
+      border: 1px solid var(--sl-border-soft, rgba(148,163,184,0.12));
+      display: flex; align-items: center; justify-content: center;
+      height: 260px; color: var(--sl-text-muted, #94a3b8); font-size: 13px;
+    }
+    .error-msg { text-align: center; padding: 12px; color: var(--sl-danger, #f87171); font-size: 12px; }
+    .hint { font-size: 12px; color: var(--sl-text-muted, #64748b); margin-top: 6px; }
+  </style>
+</head>
+<body>
+<div class="app">
+  <div class="search-wrap">
+    <input type="text" id="search" placeholder="Search stocks by symbol or name (e.g. AAPL, TSLA)…" autocomplete="off">
+    <div class="dropdown" id="dropdown"></div>
+    <div class="hint">Type a symbol or company name, then click a result to track it.</div>
+  </div>
+  <div class="watchlist" id="watchlist">
+    <span class="watchlist-label">Tracking</span>
+  </div>
+  <div id="chartsContainer" style="display:contents;"></div>
+</div>
+<script src="./chart.umd.min.js"></script>
+<script>
+// ── State ──────────────────────────────────────────────
+let watchlist = [];
+let charts = {};       // sym → Chart instance
+let chartData = {};    // sym → { meta, rows }
+
+// ── Helpers ────────────────────────────────────────────
+function tok(name, fallback) {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v || fallback;
+}
+
+function chartPalette() {
+  return {
+    line: tok('--sl-accent', '#38bdf8'),
+    fill: tok('--sl-accent', '#38bdf8'),
+    text: tok('--sl-text', '#e0e8f0'),
+    muted: tok('--sl-text-muted', '#94a3b8'),
+    grid: tok('--sl-border-soft', 'rgba(148,163,184,0.08)'),
+    up: tok('--sl-success', '#34d399'),
+    down: tok('--sl-danger', '#f87171'),
+  };
+}
+
+function fmtNum(n, dec) {
+  if (n == null || isNaN(n)) return '—';
+  return Number(n).toLocaleString(undefined, { minimumFractionDigits: dec||2, maximumFractionDigits: dec||2 });
+}
+
+// ── Proxy fetch ────────────────────────────────────────
+async function apiFetch(url) {
+  const res = await fetch('/api/proxy?url='+encodeURIComponent(url), { credentials: 'include' });
+  if (!res.ok) throw new Error('HTTP '+res.status);
+  return res.json();
+}
+
+// ── URL Hash ───────────────────────────────────────────
+function readHash() {
+  const h = location.hash.replace(/^#/, '');
+  if (!h.startsWith('tracking=')) return [];
+  const raw = h.slice('tracking='.length);
+  if (!raw) return [];
+  return [...new Set(raw.split(',').map(s => s.trim().toUpperCase()).filter(Boolean))];
+}
+
+function writeHash(syms) {
+  const h = syms.length ? '#tracking='+syms.join(',') : '';
+  if (location.hash !== h) {
+    history.replaceState(null, '', h || window.location.pathname);
+    loadWatchlist();
+  }
+}
+
+// ── Watchlist ──────────────────────────────────────────
+function loadWatchlist() {
+  const fromHash = readHash();
+  if (!fromHash.length) {
+    // Default to NASDAQ
+    watchlist = ['^IXIC'];
+    history.replaceState(null, '', '#tracking=^IXIC');
+    renderWatchlist();
+    loadChart('^IXIC');
+    return;
+  }
+  const added = fromHash.filter(s => !watchlist.includes(s));
+  const removed = watchlist.filter(s => !fromHash.includes(s));
+
+  // Destroy removed charts
+  for (const sym of removed) {
+    if (charts[sym]) { charts[sym].destroy(); delete charts[sym]; }
+    delete chartData[sym];
+    const card = document.getElementById('card-'+sym.replace(/[^A-Z0-9]/g,'_'));
+    if (card) card.remove();
+  }
+
+  watchlist = fromHash;
+  renderWatchlist();
+
+  // Load new ones
+  for (const sym of added) {
+    loadChart(sym);
+  }
+}
+
+window.addEventListener('hashchange', () => {
+  // Only respond if we didn't trigger it
+  const h = readHash();
+  const eq = h.length === watchlist.length && h.every((s,i) => s === watchlist[i]);
+  if (!eq) loadWatchlist();
+});
+
+function addStock(sym) {
+  sym = sym.toUpperCase();
+  if (watchlist.includes(sym)) return;
+  const next = [...watchlist, sym];
+  writeHash(next);
+}
+
+function removeStock(sym) {
+  const next = watchlist.filter(s => s !== sym);
+  writeHash(next);
+}
+
+function renderWatchlist() {
+  const el = document.getElementById('watchlist');
+  if (!watchlist.length) {
+    el.innerHTML = '<span class="watchlist-label">Tracking</span><span style="font-size:13px;color:var(--sl-text-muted)">No stocks yet — search above</span>';
+    return;
+  }
+  el.innerHTML = '<span class="watchlist-label">Tracking</span>' + watchlist.map(s =>
+    `<span class="chip">${s}<span class="remove" data-remove="${s}">&times;</span></span>`
+  ).join('');
+  el.querySelectorAll('.remove').forEach(btn => {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      removeStock(this.dataset.remove);
+    });
+  });
+}
+
+// ── Search ─────────────────────────────────────────────
+let searchTimer = null;
+const searchInput = document.getElementById('search');
+const dropdown = document.getElementById('dropdown');
+
+searchInput.addEventListener('input', function() {
+  clearTimeout(searchTimer);
+  const q = this.value.trim();
+  if (q.length < 1) { dropdown.classList.remove('open'); return; }
+  searchTimer = setTimeout(() => doSearch(q), 300);
+});
+
+searchInput.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') dropdown.classList.remove('open');
+});
+
+async function doSearch(q) {
+  try {
+    const data = await apiFetch('https://query1.finance.yahoo.com/v1/finance/search?q='+encodeURIComponent(q)+'&quotesCount=8');
+    const quotes = (data.quotes || []).filter(r => r.symbol && r.shortname && (r.quoteType==='EQUITY'||r.quoteType==='ETF'));
+    if (!quotes.length) {
+      dropdown.innerHTML = '<div class="dropdown-item"><span class="name">No results found</span></div>';
+    } else {
+      dropdown.innerHTML = quotes.map(r =>
+        `<div class="dropdown-item" data-symbol="${r.symbol.replace(/"/g,'')}">
+          <span class="sym">${r.symbol}</span>
+          <span class="name">${r.shortname||''}</span>
+          <span class="exch">${r.exchDisp||r.exchange||''}</span>
+        </div>`
+      ).join('');
+    }
+    dropdown.classList.add('open');
+  } catch(e) {
+    dropdown.innerHTML = '<div class="dropdown-item"><span class="name">Search unavailable</span></div>';
+    dropdown.classList.add('open');
+  }
+}
+
+dropdown.addEventListener('click', function(e) {
+  const item = e.target.closest('.dropdown-item');
+  if (!item) return;
+  const sym = item.dataset.symbol;
+  if (sym) addStock(sym);
+  dropdown.classList.remove('open');
+  searchInput.value = '';
+});
+
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.search-wrap')) dropdown.classList.remove('open');
+});
+
+// ── Chart cards ────────────────────────────────────────
+function getCardId(sym) { return 'card-'+sym.replace(/[^A-Z0-9]/g,'_'); }
+
+function createCardPlaceholder(sym) {
+  const id = getCardId(sym);
+  if (document.getElementById(id)) return;
+  const grid = document.getElementById('chartsContainer');
+  const card = document.createElement('div');
+  card.id = id;
+  card.className = 'loading-card';
+  card.textContent = 'Loading '+sym+'…';
+  grid.appendChild(card);
+}
+
+function fillCard(sym, meta, rows) {
+  const id = getCardId(sym);
+  let card = document.getElementById(id);
+  if (!card) return;
+  card.className = 'stock-card';
+
+  const last = rows[rows.length-1];
+  const prev = rows.length > 1 ? rows[rows.length-2] : last;
+  const price = last.close;
+  const change = prev ? price - prev.close : 0;
+  const changePct = prev && prev.close ? ((change/prev.close)*100) : 0;
+  const dir = change >= 0 ? 'up' : 'down';
+  const sign = change >= 0 ? '+' : '';
+
+  card.innerHTML = `
+    <div class="card-header">
+      <div class="info">
+        <div class="symbol">${sym}</div>
+        <div class="name" title="${meta.shortName||''}">${meta.shortName||''}</div>
+      </div>
+      <div class="price-block">
+        <div class="price">$${fmtNum(price)}</div>
+        <div class="change ${dir}">${sign}${fmtNum(change)} (${sign}${changePct.toFixed(2)}%)</div>
+      </div>
+    </div>
+    <div class="chart-wrap"><canvas id="canvas-${id}" aria-label="${sym} chart" role="img"></canvas></div>
+    <div class="card-footer">
+      <span class="last-date">Last: ${last.date.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'})}</span>
+      <button class="remove-btn" data-remove="${sym}">Remove</button>
+    </div>`;
+
+  // Attach remove handler
+  card.querySelector('.remove-btn').addEventListener('click', () => removeStock(sym));
+
+  // Build chart
+  const p = chartPalette();
+  const labels = rows.map(r => r.date.toLocaleDateString(undefined,{month:'short',day:'numeric'}));
+  const closePrices = rows.map(r => r.close);
+  const ctx = document.getElementById('canvas-'+id);
+
+  if (charts[sym]) charts[sym].destroy();
+
+  charts[sym] = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        data: closePrices,
+        borderColor: dir==='up' ? p.up : p.down,
+        backgroundColor: (dir==='up' ? p.up : p.down)+'18',
+        borderWidth: 2,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        pointHoverBackgroundColor: dir==='up' ? p.up : p.down,
+        fill: true,
+        tension: 0.3,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { intersect: false, mode: 'index' },
+      plugins: { legend: { display: false }, tooltip: {
+        backgroundColor: tok('--sl-raised','#0f172a'),
+        titleColor: p.text,
+        bodyColor: p.text,
+        borderColor: tok('--sl-border','rgba(125,211,252,0.18)'),
+        borderWidth: 1,
+        callbacks: { label: ctx => sym+': $'+fmtNum(ctx.raw) }
+      }},
+      scales: {
+        x: { display: false },
+        y: { display: false }
+      }
+    }
+  });
+}
+
+function showCardError(sym, msg) {
+  const id = getCardId(sym);
+  const card = document.getElementById(id);
+  if (!card) return;
+  card.className = 'stock-card';
+  card.innerHTML = `<div class="card-header"><div class="info"><div class="symbol">${sym}</div></div></div><div class="error-msg">${msg}</div><div class="card-footer"><button class="remove-btn" data-remove="${sym}">Remove</button></div>`;
+  card.querySelector('.remove-btn').addEventListener('click', () => removeStock(sym));
+}
+
+// ── Load chart data ────────────────────────────────────
+async function loadChart(sym) {
+  createCardPlaceholder(sym);
+  try {
+    const data = await apiFetch('https://query1.finance.yahoo.com/v8/finance/chart/'+encodeURIComponent(sym)+'?range=1mo&interval=1d');
+    const result = (data.chart?.result||[])[0];
+    if (!result) throw new Error('No data');
+
+    const meta = result.meta || {};
+    const timestamps = result.timestamp || [];
+    const quote = (result.indicators?.quote||[])[0] || {};
+    const closes = quote.close || [];
+
+    const rows = [];
+    for (let i=0; i<timestamps.length; i++) {
+      if (closes[i]==null) continue;
+      rows.push({ date: new Date(timestamps[i]*1000), close: closes[i] });
+    }
+    if (!rows.length) throw new Error('No price data');
+
+    chartData[sym] = { meta, rows };
+    fillCard(sym, meta, rows);
+  } catch(e) {
+    showCardError(sym, e.message||'Failed to load');
+  }
+}
+
+// ── Theme change ───────────────────────────────────────
+window.SlopOS.on('themechange', () => {
+  // Re-render all existing cards
+  for (const sym of watchlist) {
+    const cd = chartData[sym];
+    if (cd) fillCard(sym, cd.meta, cd.rows);
+  }
+});
+
+// ── Init ───────────────────────────────────────────────
+loadWatchlist();
+</script>
+</body>
+</html>
