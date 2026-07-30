@@ -4,452 +4,1439 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" type="image/svg+xml" href="./icon.svg">
-  <title>Stock Tracker</title>
+  <title>Sudoku</title>
   <script src="/slop-os.js"></script>
   <link rel="stylesheet" href="/styles.css">
+
   <style>
-    * { box-sizing: border-box; }
-    :root[data-mode="dark"] {
-      --sl-wallpaper: radial-gradient(circle at top left, rgba(56,189,248,0.12), transparent 34%),
-        linear-gradient(180deg, #0a1320 0%, #060b12 100%);
-    }
-    :root[data-mode="light"] {
-      --sl-wallpaper: radial-gradient(circle at top left, color-mix(in srgb, var(--sl-accent, #1f6bd0) 12%, transparent), transparent 34%),
-        var(--sl-surface, #f5f8fc);
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
-      margin: 0; min-height: 100vh; padding: 20px;
-      font-family: system-ui, -apple-system, sans-serif;
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 6px 6px;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
     }
-    .app { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
 
-    .search-wrap { position: relative; }
-    .search-wrap input {
-      width: 100%; padding: 12px 16px;
-      border-radius: var(--sl-radius, 12px);
-      background: var(--sl-raised, rgba(15,23,42,0.76));
-      border: 1px solid var(--sl-border, rgba(125,211,252,0.18));
-      color: var(--sl-text, #e0e8f0); font-size: 15px; outline: none;
-      transition: border-color 0.2s;
+    .panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+      padding: 0 12px 12px;
+      max-width: 600px;
+      width: 100%;
     }
-    .search-wrap input:focus { border-color: var(--sl-accent, #38bdf8); }
-    .search-wrap input::placeholder { color: var(--sl-text-muted, #64748b); }
 
-    .dropdown {
-      position: absolute; top: 100%; left: 0; right: 0; z-index: 10;
-      background: var(--sl-raised, rgba(15,23,42,0.97));
-      border: 1px solid var(--sl-border, rgba(125,211,252,0.18));
-      border-radius: var(--sl-radius, 12px);
-      margin-top: 4px; max-height: 280px; overflow-y: auto; display: none;
+    /* ── Difficulty modal ── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
     }
-    .dropdown.open { display: block; }
-    .dropdown-item {
-      padding: 10px 16px; cursor: pointer; display: flex; justify-content: space-between;
-      align-items: center; gap: 12px;
-      border-bottom: 1px solid var(--sl-border-soft, rgba(148,163,184,0.08));
-      transition: background 0.15s;
-    }
-    .dropdown-item:last-child { border-bottom: none; }
-    .dropdown-item:hover { background: var(--sl-border-soft, rgba(148,163,184,0.08)); }
-    .dropdown-item .sym { font-weight: 600; color: var(--sl-text, #e0e8f0); white-space: nowrap; }
-    .dropdown-item .name { font-size: 13px; color: var(--sl-text-muted, #94a3b8); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex:1; }
-    .dropdown-item .exch { font-size: 11px; color: var(--sl-accent, #38bdf8); white-space: nowrap; }
+    .modal-overlay.show { display: flex; }
 
-    .watchlist { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-    .watchlist-label { font-size: 12px; color: var(--sl-text-muted, #94a3b8); text-transform: uppercase; letter-spacing: 0.05em; }
-    .chip {
-      display: flex; align-items: center; gap: 6px;
-      padding: 6px 12px; border-radius: 999px;
-      font-size: 13px; font-weight: 500;
-      background: var(--sl-raised, rgba(12,74,110,0.32));
+    .modal-box {
+      background: var(--sl-surface, #0f1923);
       border: 1px solid var(--sl-border, rgba(125,211,252,0.18));
+      border-radius: 14px;
+      padding: 20px 24px;
+      min-width: 260px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .modal-title {
+      font-size: 15px;
+      font-weight: 600;
       color: var(--sl-text, #e0e8f0);
-      transition: all 0.15s;
+      text-align: center;
     }
-    .chip .remove {
-      width: 16px; height: 16px; border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 11px; line-height: 1; cursor: pointer;
-      background: rgba(255,255,255,0.15); opacity: 0.7; transition: opacity 0.15s;
-    }
-    .chip .remove:hover { opacity: 1; background: rgba(255,80,80,0.4); }
 
-    .charts-grid {
+    .modal-options {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .modal-opt {
+      padding: 10px 16px;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid var(--sl-border, rgba(125,211,252,0.18));
+      background: transparent;
+      color: var(--sl-text, #e0e8f0);
+      transition: all 0.12s;
+      text-align: center;
+    }
+
+    .modal-opt:hover {
+      border-color: var(--sl-accent, #38bdf8);
+      color: var(--sl-accent, #38bdf8);
+    }
+
+    .modal-opt.active {
+      background: var(--sl-accent, #38bdf8);
+      color: #0a1320;
+      border-color: var(--sl-accent, #38bdf8);
+      font-weight: 600;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: center;
+    }
+
+    /* ── Board ── */
+    .board-wrap {
+      position: relative;
+    }
+
+    .board {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-      gap: 14px;
+      grid-template-columns: repeat(9, 1fr);
+      grid-template-rows: repeat(9, 1fr);
+      width: min(540px, calc(100vw - 20px), calc(100vh - 220px));
+      height: min(540px, calc(100vw - 20px), calc(100vh - 220px));
+      border: 2.5px solid var(--sl-text, #e0e8f0);
+      border-radius: 8px;
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
     }
 
-    .stock-card {
-      padding: 16px;
-      border-radius: var(--sl-radius, 14px);
+    .cell {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: clamp(18px, 5vw, 30px);
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      cursor: pointer;
+      transition: background 0.1s;
+      border-right: 1px solid var(--sl-border-soft, rgba(148,163,184,0.15));
+      border-bottom: 1px solid var(--sl-border-soft, rgba(148,163,184,0.15));
+      position: relative;
+    }
+
+    /* Thicker borders for 3×3 boxes */
+    .cell.box-right {
+      border-right: 2.5px solid var(--sl-text, #e0e8f0);
+    }
+    .cell.box-bottom {
+      border-bottom: 2.5px solid var(--sl-text, #e0e8f0);
+    }
+
+    /* Given cells */
+    .cell.given {
+      color: var(--sl-text, #e0e8f0);
+      cursor: default;
+    }
+
+    /* User-filled cells */
+    .cell.user {
+      color: var(--sl-accent, #38bdf8);
+    }
+
+    /* Selected cell */
+    .cell.selected {
+      background: rgba(56, 189, 248, 0.22) !important;
+    }
+
+    /* Same row/col/box highlight */
+    .cell.highlighted {
+      background: rgba(56, 189, 248, 0.08);
+    }
+
+    /* Same number highlight */
+    .cell.same-number {
+      background: rgba(56, 189, 248, 0.14);
+    }
+
+    /* Error cell */
+    .cell.error {
+      color: #f87171 !important;
+      background: rgba(248, 113, 113, 0.18) !important;
+    }
+
+    /* Hover */
+    .cell:not(.given):hover {
+      background: rgba(56, 189, 248, 0.12);
+    }
+
+    /* ── Number pad ── */
+    .numpad {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: center;
+      width: 100%;
+    }
+
+    .numpad-row {
+      display: flex;
+      gap: 6px;
+      justify-content: center;
+      width: 100%;
+    }
+
+    .num-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      border: 1px solid var(--sl-border, rgba(125,211,252,0.18));
       background: var(--sl-raised, rgba(15,23,42,0.76));
-      border: 1px solid var(--sl-border-soft, rgba(148,163,184,0.12));
-      display: flex; flex-direction: column; gap: 10px;
+      color: var(--sl-text, #e0e8f0);
+      font-size: 17px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.12s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
-    .stock-card .card-header {
-      display: flex; justify-content: space-between; align-items: flex-start;
-    }
-    .stock-card .card-header .info { min-width: 0; }
-    .stock-card .symbol { font-size: 16px; font-weight: 700; color: var(--sl-text, #e0e8f0); letter-spacing: -0.01em; }
-    .stock-card .name { font-size: 12px; color: var(--sl-text-muted, #94a3b8); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .stock-card .price-block { text-align: right; }
-    .stock-card .price { font-size: 18px; font-weight: 700; color: var(--sl-text, #e0e8f0); }
-    .stock-card .change { font-size: 13px; font-weight: 500; }
-    .up { color: var(--sl-success, #34d399); }
-    .down { color: var(--sl-danger, #f87171); }
-    .stock-card .chart-wrap { position: relative; height: 160px; }
-    .stock-card .card-footer { display: flex; justify-content: space-between; align-items: center; }
-    .stock-card .last-date { font-size: 11px; color: var(--sl-text-muted, #64748b); }
-    .stock-card .remove-btn {
-      background: none; border: 1px solid var(--sl-border-soft, rgba(148,163,184,0.15));
-      color: var(--sl-text-muted, #94a3b8); font-size: 11px; padding: 4px 10px;
-      border-radius: 6px; cursor: pointer; transition: all 0.15s;
-    }
-    .stock-card .remove-btn:hover { color: var(--sl-danger, #f87171); border-color: var(--sl-danger, #f87171); }
 
-    .empty-state {
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      padding: 64px 24px; text-align: center;
+    .num-btn:hover {
+      border-color: var(--sl-accent, #38bdf8);
+      color: var(--sl-accent, #38bdf8);
     }
-    .empty-state svg { width: 64px; height: 64px; margin-bottom: 16px; opacity: 0.5; }
-    .empty-state h3 { margin: 0 0 8px; color: var(--sl-text, #e0e8f0); font-size: 18px; }
-    .empty-state p { margin: 0; color: var(--sl-text-muted, #94a3b8); font-size: 14px; }
 
-    .loading-card {
-      padding: 16px; border-radius: var(--sl-radius, 14px);
+    .num-btn:active {
+      background: var(--sl-accent, #38bdf8);
+      color: #0a1320;
+      border-color: var(--sl-accent, #38bdf8);
+    }
+
+    .num-btn.used-up {
+      opacity: 0.25;
+      pointer-events: none;
+    }
+
+    .num-btn.util {
+      width: auto;
+      padding: 0 18px;
+      height: 42px;
+      font-size: 15px;
+      border-radius: 10px;
+    }
+
+    .num-btn.erase {
+      font-weight: 500;
+      color: var(--sl-text-muted, #94a3b8);
+    }
+
+    .num-btn.notes-toggle {
+      font-weight: 600;
+      letter-spacing: 0.01em;
+    }
+
+    .num-btn.notes-toggle.active {
+      background: var(--sl-accent, #38bdf8);
+      color: #0a1320;
+      border-color: var(--sl-accent, #38bdf8);
+    }
+
+    /* ── Notes (pencil marks) ── */
+    .notes-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      width: 100%;
+      height: 100%;
+      padding: 2px;
+    }
+
+    .notes-grid span {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: clamp(8px, 2vw, 13px);
+      font-weight: 500;
+      line-height: 1;
+      color: var(--sl-text-muted, #94a3b8);
+      opacity: 0.75;
+    }
+
+    .cell.selected .notes-grid span {
+      color: var(--sl-text, #e0e8f0);
+      opacity: 0.85;
+    }
+
+    /* ── Action buttons ── */
+    .actions {
+      display: flex;
+      gap: 10px;
+      width: 100%;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: center;
+    }
+
+
+
+    .btn {
+      padding: 10px 20px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid var(--sl-border, rgba(125,211,252,0.18));
+      transition: all 0.15s;
       background: var(--sl-raised, rgba(15,23,42,0.76));
-      border: 1px solid var(--sl-border-soft, rgba(148,163,184,0.12));
-      display: flex; align-items: center; justify-content: center;
-      height: 260px; color: var(--sl-text-muted, #94a3b8); font-size: 13px;
+      color: var(--sl-text, #e0e8f0);
+      white-space: nowrap;
     }
-    .error-msg { text-align: center; padding: 12px; color: var(--sl-danger, #f87171); font-size: 12px; }
-    .hint { font-size: 12px; color: var(--sl-text-muted, #64748b); margin-top: 6px; }
+
+    .btn:hover {
+      border-color: var(--sl-accent, #38bdf8);
+      color: var(--sl-accent, #38bdf8);
+    }
+
+    .btn.primary {
+      background: var(--sl-accent, #38bdf8);
+      color: #0a1320;
+      border-color: var(--sl-accent, #38bdf8);
+    }
+
+    .btn.primary:hover {
+      opacity: 0.88;
+    }
+
+    .btn.warn {
+      background: rgba(251, 191, 36, 0.12);
+      color: #fbbf24;
+      border-color: rgba(251, 191, 36, 0.3);
+    }
+
+    .btn.warn:hover {
+      background: rgba(251, 191, 36, 0.22);
+      border-color: #fbbf24;
+    }
+
+    .btn:disabled {
+      opacity: 0.35;
+      pointer-events: none;
+    }
+
+    /* Icon-only small buttons */
+    .btn.icon {
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      border-radius: 8px;
+      font-size: 17px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+    }
+
+    .btn.icon.copied {
+      color: #34d399;
+      border-color: rgba(52, 211, 153, 0.35);
+    }
+
+    .btn.icon.warn {
+      color: #f87171;
+      border-color: rgba(248, 113, 113, 0.35);
+    }
+
+    /* ── Win overlay (covers the board) ── */
+    .win-overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: color-mix(in srgb, var(--sl-surface, #0f1923) 20%, transparent);
+      backdrop-filter: blur(5px);
+      -webkit-backdrop-filter: blur(5px);
+      border-radius: 8px;
+      z-index: 20;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+    }
+
+    .win-overlay.show {
+      display: flex;
+      animation: winFadeIn 0.25s ease-out;
+    }
+
+    @keyframes winFadeIn {
+      0% { opacity: 0; }
+      100% { opacity: 1; }
+    }
+
+    .win-card {
+      background: var(--sl-raised, rgba(15, 23, 42, 0.95));
+      border: 2px solid var(--sl-accent, rgba(56, 189, 248, 0.45));
+      border-radius: 18px;
+      padding: 28px 36px;
+      text-align: center;
+      box-shadow:
+        0 0 50px var(--sl-accent-glow, rgba(56, 189, 248, 0.20)),
+        0 0 100px var(--sl-accent-glow2, rgba(56, 189, 248, 0.08)),
+        0 20px 50px rgba(0, 0, 0, 0.45);
+      animation: winBounceIn 0.55s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      max-width: 88%;
+    }
+
+    @keyframes winBounceIn {
+      0%   { transform: scale(0.25); opacity: 0; }
+      55%  { transform: scale(1.06); opacity: 1; }
+      75%  { transform: scale(0.94); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    .win-emoji {
+      font-size: 52px;
+      animation: winPulse 1.6s ease-in-out infinite;
+      display: block;
+      line-height: 1;
+    }
+
+    @keyframes winPulse {
+      0%, 100% { transform: scale(1); }
+      40%  { transform: scale(1.18); }
+    }
+
+    .win-title {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--sl-accent, #38bdf8);
+      margin: 10px 0 2px;
+      letter-spacing: -0.01em;
+    }
+
+    .win-diff-badge {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--sl-text-muted, #94a3b8);
+      text-transform: uppercase;
+      letter-spacing: 0.10em;
+      margin-bottom: 10px;
+      background: color-mix(in srgb, var(--sl-accent, #38bdf8) 10%, transparent);
+      border: 1px solid color-mix(in srgb, var(--sl-accent, #38bdf8) 18%, transparent);
+      padding: 4px 14px;
+      border-radius: 20px;
+      display: inline-block;
+    }
+
+    .win-stats {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--sl-text, #e0e8f0);
+      line-height: 1.7;
+    }
+
+    .win-stats span {
+      color: var(--sl-accent, #38bdf8);
+      font-weight: 600;
+    }
+
+    /* ── Confetti ── */
+    .win-confetti {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+      border-radius: 8px;
+      z-index: 21;
+    }
+
+    .confetti-piece {
+      position: absolute;
+      width: 9px;
+      height: 9px;
+      border-radius: 2px;
+      animation: confettiFall linear forwards;
+    }
+
+    @keyframes confettiFall {
+      0%   { transform: translateY(-30px) rotate(0deg) scale(1); opacity: 1; }
+      80%  { opacity: 0.9; }
+      100% { transform: translateY(620px) rotate(680deg) scale(0.6); opacity: 0; }
+    }
+
+    /* ── Row / Column / Box completion pop ── */
+    @keyframes cellPop {
+      0%   { transform: scale(1); }
+      35%  { transform: scale(1.28); }
+      65%  { transform: scale(0.94); }
+      100% { transform: scale(1); }
+    }
+
+    .cell.pop {
+      animation: cellPop 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      z-index: 3;
+    }
+
+    /* ── Flying thumbs-up ── */
+    .thumbs-up-fly {
+      position: absolute;
+      font-size: 56px;
+      pointer-events: none;
+      z-index: 30;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      animation: thumbsUpFade 1.1s ease-out forwards;
+      line-height: 1;
+    }
+
+    @keyframes thumbsUpFade {
+      0%   { opacity: 1; transform: translate(-50%, -50%) scale(0.5) translateY(0); }
+      15%  { opacity: 1; transform: translate(-50%, -50%) scale(1.25) translateY(-12px); }
+      30%  { transform: translate(-50%, -50%) scale(1) translateY(-24px); }
+      100% { opacity: 0; transform: translate(-50%, -50%) scale(0.85) translateY(-110px); }
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 400px) {
+      .panel { padding: 0 6px 8px; gap: 14px; }
+      .num-btn { width: 30px; height: 30px; font-size: 15px; }
+      .num-btn.util { width: auto; height: 36px; font-size: 13px; padding: 0 12px; }
+    }
   </style>
-</head>
+<link rel="manifest" href="/manifest.json"></head>
 <body>
-<div class="app">
-  <div class="search-wrap">
-    <input type="text" id="search" placeholder="Search stocks by symbol or name (e.g. AAPL, TSLA)…" autocomplete="off">
-    <div class="dropdown" id="dropdown"></div>
-    <div class="hint">Type a symbol or company name, then click a result to track it.</div>
-  </div>
-  <div class="watchlist" id="watchlist">
-    <span class="watchlist-label">Tracking</span>
-  </div>
-  <div id="chartsContainer" style="display:contents;"></div>
-</div>
-<script src="./chart.umd.min.js"></script>
-<script>
-// ── State ──────────────────────────────────────────────
-let watchlist = [];
-let charts = {};       // sym → Chart instance
-let chartData = {};    // sym → { meta, rows }
 
-// ── Helpers ────────────────────────────────────────────
-function tok(name, fallback) {
-  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  return v || fallback;
-}
-
-function chartPalette() {
-  return {
-    line: tok('--sl-accent', '#38bdf8'),
-    fill: tok('--sl-accent', '#38bdf8'),
-    text: tok('--sl-text', '#e0e8f0'),
-    muted: tok('--sl-text-muted', '#94a3b8'),
-    grid: tok('--sl-border-soft', 'rgba(148,163,184,0.08)'),
-    up: tok('--sl-success', '#34d399'),
-    down: tok('--sl-danger', '#f87171'),
-  };
-}
-
-function fmtNum(n, dec) {
-  if (n == null || isNaN(n)) return '—';
-  return Number(n).toLocaleString(undefined, { minimumFractionDigits: dec||2, maximumFractionDigits: dec||2 });
-}
-
-// ── Proxy fetch ────────────────────────────────────────
-async function apiFetch(url) {
-  const res = await fetch('/api/proxy?url='+encodeURIComponent(url), { credentials: 'include' });
-  if (!res.ok) throw new Error('HTTP '+res.status);
-  return res.json();
-}
-
-// ── URL Hash ───────────────────────────────────────────
-function readHash() {
-  const h = location.hash.replace(/^#/, '');
-  if (!h.startsWith('tracking=')) return [];
-  const raw = h.slice('tracking='.length);
-  if (!raw) return [];
-  return [...new Set(raw.split(',').map(s => s.trim().toUpperCase()).filter(Boolean))];
-}
-
-function writeHash(syms) {
-  const h = syms.length ? '#tracking='+syms.join(',') : '';
-  if (location.hash !== h) {
-    history.replaceState(null, '', h || window.location.pathname);
-    loadWatchlist();
-  }
-}
-
-// ── Watchlist ──────────────────────────────────────────
-function loadWatchlist() {
-  const fromHash = readHash();
-  if (!fromHash.length) {
-    // Default to NASDAQ
-    watchlist = ['^IXIC'];
-    history.replaceState(null, '', '#tracking=^IXIC');
-    renderWatchlist();
-    loadChart('^IXIC');
-    return;
-  }
-  const added = fromHash.filter(s => !watchlist.includes(s));
-  const removed = watchlist.filter(s => !fromHash.includes(s));
-
-  // Destroy removed charts
-  for (const sym of removed) {
-    if (charts[sym]) { charts[sym].destroy(); delete charts[sym]; }
-    delete chartData[sym];
-    const card = document.getElementById('card-'+sym.replace(/[^A-Z0-9]/g,'_'));
-    if (card) card.remove();
-  }
-
-  watchlist = fromHash;
-  renderWatchlist();
-
-  // Load new ones
-  for (const sym of added) {
-    loadChart(sym);
-  }
-}
-
-window.addEventListener('hashchange', () => {
-  // Only respond if we didn't trigger it
-  const h = readHash();
-  const eq = h.length === watchlist.length && h.every((s,i) => s === watchlist[i]);
-  if (!eq) loadWatchlist();
-});
-
-function addStock(sym) {
-  sym = sym.toUpperCase();
-  if (watchlist.includes(sym)) return;
-  const next = [...watchlist, sym];
-  writeHash(next);
-}
-
-function removeStock(sym) {
-  const next = watchlist.filter(s => s !== sym);
-  writeHash(next);
-}
-
-function renderWatchlist() {
-  const el = document.getElementById('watchlist');
-  if (!watchlist.length) {
-    el.innerHTML = '<span class="watchlist-label">Tracking</span><span style="font-size:13px;color:var(--sl-text-muted)">No stocks yet — search above</span>';
-    return;
-  }
-  el.innerHTML = '<span class="watchlist-label">Tracking</span>' + watchlist.map(s =>
-    `<span class="chip">${s}<span class="remove" data-remove="${s}">&times;</span></span>`
-  ).join('');
-  el.querySelectorAll('.remove').forEach(btn => {
-    btn.addEventListener('click', function(e) {
-      e.stopPropagation();
-      removeStock(this.dataset.remove);
-    });
-  });
-}
-
-// ── Search ─────────────────────────────────────────────
-let searchTimer = null;
-const searchInput = document.getElementById('search');
-const dropdown = document.getElementById('dropdown');
-
-searchInput.addEventListener('input', function() {
-  clearTimeout(searchTimer);
-  const q = this.value.trim();
-  if (q.length < 1) { dropdown.classList.remove('open'); return; }
-  searchTimer = setTimeout(() => doSearch(q), 300);
-});
-
-searchInput.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') dropdown.classList.remove('open');
-});
-
-async function doSearch(q) {
-  try {
-    const data = await apiFetch('https://query1.finance.yahoo.com/v1/finance/search?q='+encodeURIComponent(q)+'&quotesCount=8');
-    const quotes = (data.quotes || []).filter(r => r.symbol && r.shortname && (r.quoteType==='EQUITY'||r.quoteType==='ETF'));
-    if (!quotes.length) {
-      dropdown.innerHTML = '<div class="dropdown-item"><span class="name">No results found</span></div>';
-    } else {
-      dropdown.innerHTML = quotes.map(r =>
-        `<div class="dropdown-item" data-symbol="${r.symbol.replace(/"/g,'')}">
-          <span class="sym">${r.symbol}</span>
-          <span class="name">${r.shortname||''}</span>
-          <span class="exch">${r.exchDisp||r.exchange||''}</span>
-        </div>`
-      ).join('');
-    }
-    dropdown.classList.add('open');
-  } catch(e) {
-    dropdown.innerHTML = '<div class="dropdown-item"><span class="name">Search unavailable</span></div>';
-    dropdown.classList.add('open');
-  }
-}
-
-dropdown.addEventListener('click', function(e) {
-  const item = e.target.closest('.dropdown-item');
-  if (!item) return;
-  const sym = item.dataset.symbol;
-  if (sym) addStock(sym);
-  dropdown.classList.remove('open');
-  searchInput.value = '';
-});
-
-document.addEventListener('click', function(e) {
-  if (!e.target.closest('.search-wrap')) dropdown.classList.remove('open');
-});
-
-// ── Chart cards ────────────────────────────────────────
-function getCardId(sym) { return 'card-'+sym.replace(/[^A-Z0-9]/g,'_'); }
-
-function createCardPlaceholder(sym) {
-  const id = getCardId(sym);
-  if (document.getElementById(id)) return;
-  const grid = document.getElementById('chartsContainer');
-  const card = document.createElement('div');
-  card.id = id;
-  card.className = 'loading-card';
-  card.textContent = 'Loading '+sym+'…';
-  grid.appendChild(card);
-}
-
-function fillCard(sym, meta, rows) {
-  const id = getCardId(sym);
-  let card = document.getElementById(id);
-  if (!card) return;
-  card.className = 'stock-card';
-
-  const last = rows[rows.length-1];
-  const prev = rows.length > 1 ? rows[rows.length-2] : last;
-  const price = last.close;
-  const change = prev ? price - prev.close : 0;
-  const changePct = prev && prev.close ? ((change/prev.close)*100) : 0;
-  const dir = change >= 0 ? 'up' : 'down';
-  const sign = change >= 0 ? '+' : '';
-
-  card.innerHTML = `
-    <div class="card-header">
-      <div class="info">
-        <div class="symbol">${sym}</div>
-        <div class="name" title="${meta.shortName||''}">${meta.shortName||''}</div>
-      </div>
-      <div class="price-block">
-        <div class="price">$${fmtNum(price)}</div>
-        <div class="change ${dir}">${sign}${fmtNum(change)} (${sign}${changePct.toFixed(2)}%)</div>
+  <div class="panel">
+    <!-- The board -->
+    <div class="board-wrap">
+      <div class="board" id="board"></div>
+      <!-- Win overlay (covers the board) -->
+      <div class="win-overlay" id="winOverlay">
+        <div class="win-confetti" id="winConfetti"></div>
+        <div class="win-card">
+          <span class="win-emoji">🏆</span>
+          <div class="win-title">Puzzle Solved!</div>
+          <div class="win-diff-badge" id="winDiffBadge"></div>
+          <div class="win-stats" id="winStats"></div>
+        </div>
       </div>
     </div>
-    <div class="chart-wrap"><canvas id="canvas-${id}" aria-label="${sym} chart" role="img"></canvas></div>
-    <div class="card-footer">
-      <span class="last-date">Last: ${last.date.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'})}</span>
-      <button class="remove-btn" data-remove="${sym}">Remove</button>
-    </div>`;
 
-  // Attach remove handler
-  card.querySelector('.remove-btn').addEventListener('click', () => removeStock(sym));
+    <!-- Number pad -->
+    <div class="numpad" id="numpad"></div>
 
-  // Build chart
-  const p = chartPalette();
-  const labels = rows.map(r => r.date.toLocaleDateString(undefined,{month:'short',day:'numeric'}));
-  const closePrices = rows.map(r => r.close);
-  const ctx = document.getElementById('canvas-'+id);
+    <!-- Action buttons -->
+    <div class="actions">
+      <button class="btn" id="btnStartOver">↺ Start Over</button>
+      <button class="btn primary" id="btnNew">+ New Game</button>
+      <button class="btn icon" id="btnShare" title="Copy puzzle URL">🔗</button>
+      <button class="btn icon" id="btnImport" title="Import puzzle from URL">📥</button>
+    </div>
 
-  if (charts[sym]) charts[sym].destroy();
+    <!-- Difficulty picker modal -->
+    <div class="modal-overlay" id="diffModal">
+      <div class="modal-box">
+        <div class="modal-title">New Game — Difficulty</div>
+        <div class="modal-options" id="diffOptions"></div>
+        <div class="modal-actions">
+          <button class="btn" id="diffCancel">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
-  charts[sym] = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [{
-        data: closePrices,
-        borderColor: dir==='up' ? p.up : p.down,
-        backgroundColor: (dir==='up' ? p.up : p.down)+'18',
-        borderWidth: 2,
-        pointRadius: 0,
-        pointHoverRadius: 4,
-        pointHoverBackgroundColor: dir==='up' ? p.up : p.down,
-        fill: true,
-        tension: 0.3,
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { intersect: false, mode: 'index' },
-      plugins: { legend: { display: false }, tooltip: {
-        backgroundColor: tok('--sl-raised','#0f172a'),
-        titleColor: p.text,
-        bodyColor: p.text,
-        borderColor: tok('--sl-border','rgba(125,211,252,0.18)'),
-        borderWidth: 1,
-        callbacks: { label: ctx => sym+': $'+fmtNum(ctx.raw) }
-      }},
-      scales: {
-        x: { display: false },
-        y: { display: false }
+  <script src="sudoku.js"></script>
+  <script>
+    (() => {
+
+      /* ──────────── STATE ──────────── */
+      let currentDifficulty = 'medium';
+      let puzzle       = null;   // 9×9 array (0 = empty)
+      let solution     = null;   // 9×9 complete solution
+      let userBoard    = null;   // 9×9 — user's current state
+      let givenMask    = null;   // 9×9 boolean — true if cell is a given
+      let notesBoard   = null;   // 9×9 bitmask — bit n-1 set = note n present
+      let notesMode    = false;  // true when user is entering notes
+      let selectedRow  = -1;
+      let selectedCol  = -1;
+      let checkCount   = 0;
+      let errorCells   = null;   // Set of "r,c" strings
+      let isComplete   = false;
+      let startTime    = null;   // Date.now() when game started
+
+      /* ──────────── DOM REFS ──────────── */
+      const boardEl      = document.getElementById('board');
+      const numpadEl     = document.getElementById('numpad');
+      const winOverlay   = document.getElementById('winOverlay');
+      const winDiffBadge = document.getElementById('winDiffBadge');
+      const winStats     = document.getElementById('winStats');
+      const winConfetti  = document.getElementById('winConfetti');
+      const btnStartOver = document.getElementById('btnStartOver');
+      const btnShare     = document.getElementById('btnShare');
+      const btnImport    = document.getElementById('btnImport');
+      const btnNew       = document.getElementById('btnNew');
+      const diffModal    = document.getElementById('diffModal');
+      const diffOptions  = document.getElementById('diffOptions');
+      const diffCancel   = document.getElementById('diffCancel');
+
+      /* ──────────── DIFFICULTY MODAL ──────────── */
+      function buildDiffOptions() {
+        diffOptions.innerHTML = '';
+        Object.entries(Sudoku.DIFFICULTIES).forEach(([key, cfg]) => {
+          const btn = document.createElement('button');
+          btn.className = 'modal-opt' + (key === currentDifficulty ? ' active' : '');
+          btn.textContent = cfg.label;
+          btn.addEventListener('click', () => {
+            currentDifficulty = key;
+            buildDiffOptions();
+            hideNewGameDialog();
+            startNewGame();
+          });
+          diffOptions.appendChild(btn);
+        });
       }
-    }
-  });
-}
 
-function showCardError(sym, msg) {
-  const id = getCardId(sym);
-  const card = document.getElementById(id);
-  if (!card) return;
-  card.className = 'stock-card';
-  card.innerHTML = `<div class="card-header"><div class="info"><div class="symbol">${sym}</div></div></div><div class="error-msg">${msg}</div><div class="card-footer"><button class="remove-btn" data-remove="${sym}">Remove</button></div>`;
-  card.querySelector('.remove-btn').addEventListener('click', () => removeStock(sym));
-}
+      function showNewGameDialog() {
+        buildDiffOptions();
+        diffModal.classList.add('show');
+      }
 
-// ── Load chart data ────────────────────────────────────
-async function loadChart(sym) {
-  createCardPlaceholder(sym);
-  try {
-    const data = await apiFetch('https://query1.finance.yahoo.com/v8/finance/chart/'+encodeURIComponent(sym)+'?range=1mo&interval=1d');
-    const result = (data.chart?.result||[])[0];
-    if (!result) throw new Error('No data');
+      function hideNewGameDialog() {
+        diffModal.classList.remove('show');
+      }
 
-    const meta = result.meta || {};
-    const timestamps = result.timestamp || [];
-    const quote = (result.indicators?.quote||[])[0] || {};
-    const closes = quote.close || [];
+      /* ──────────── BUILD NUMBER PAD ──────────── */
+      function buildNumpad() {
+        numpadEl.innerHTML = '';
+        // Row 1: digits 1-9
+        const row1 = document.createElement('div');
+        row1.className = 'numpad-row';
+        for (let n = 1; n <= 9; n++) {
+          const btn = document.createElement('button');
+          btn.className = 'num-btn';
+          btn.textContent = n;
+          btn.dataset.num = n;
+          btn.addEventListener('click', () => placeNumber(n));
+          row1.appendChild(btn);
+        }
+        numpadEl.appendChild(row1);
+        // Row 2: utility buttons (erase + notes + check)
+        const row2 = document.createElement('div');
+        row2.className = 'numpad-row';
+        const eraseBtn = document.createElement('button');
+        eraseBtn.className = 'num-btn util erase';
+        eraseBtn.textContent = '⌫ Erase';
+        eraseBtn.title = 'Erase (Backspace)';
+        eraseBtn.addEventListener('click', () => placeNumber(0));
+        row2.appendChild(eraseBtn);
+        const notesBtn = document.createElement('button');
+        notesBtn.id = 'btnNotes';
+        notesBtn.className = 'num-btn util notes-toggle' + (notesMode ? ' active' : '');
+        notesBtn.textContent = '✎ Notes';
+        notesBtn.title = 'Toggle notes mode (N)';
+        notesBtn.addEventListener('click', toggleNotesMode);
+        row2.appendChild(notesBtn);
+        const checkBtn = document.createElement('button');
+        checkBtn.id = 'btnCheck';
+        checkBtn.className = 'num-btn util';
+        checkBtn.textContent = '✓ Check';
+        checkBtn.title = 'Check answers';
+        checkBtn.addEventListener('click', doCheck);
+        row2.appendChild(checkBtn);
+        numpadEl.appendChild(row2);
+      }
 
-    const rows = [];
-    for (let i=0; i<timestamps.length; i++) {
-      if (closes[i]==null) continue;
-      rows.push({ date: new Date(timestamps[i]*1000), close: closes[i] });
-    }
-    if (!rows.length) throw new Error('No price data');
+      function toggleNotesMode() {
+        notesMode = !notesMode;
+        const btn = document.getElementById('btnNotes');
+        if (btn) {
+          btn.className = 'num-btn util notes-toggle' + (notesMode ? ' active' : '');
+        }
+        saveStateToHash();
+      }
 
-    chartData[sym] = { meta, rows };
-    fillCard(sym, meta, rows);
-  } catch(e) {
-    showCardError(sym, e.message||'Failed to load');
-  }
-}
+      /* ──────────── UPDATE NUMPAD COUNTS ──────────── */
+      function updateNumpadCounts() {
+        if (!userBoard) return;
+        // Count how many of each number are placed on the board
+        const counts = {};
+        for (let n = 1; n <= 9; n++) counts[n] = 0;
+        for (let r = 0; r < 9; r++) {
+          for (let c = 0; c < 9; c++) {
+            const val = userBoard[r][c];
+            if (val > 0) counts[val]++;
+          }
+        }
+        // Mark buttons as used-up if count reaches 9
+        const buttons = numpadEl.querySelectorAll('.num-btn');
+        buttons.forEach(btn => {
+          const n = parseInt(btn.dataset.num, 10);
+          if (n && counts[n] >= 9) {
+            btn.classList.add('used-up');
+          } else {
+            btn.classList.remove('used-up');
+          }
+        });
+      }
 
-// ── Theme change ───────────────────────────────────────
-window.SlopOS.on('themechange', () => {
-  // Re-render all existing cards
-  for (const sym of watchlist) {
-    const cd = chartData[sym];
-    if (cd) fillCard(sym, cd.meta, cd.rows);
-  }
-});
+      /* ──────────── RENDER BOARD ──────────── */
+      function renderBoard() {
+        boardEl.innerHTML = '';
+        errorCells = errorCells || new Set();
 
-// ── Init ───────────────────────────────────────────────
-loadWatchlist();
-</script>
+        for (let r = 0; r < 9; r++) {
+          for (let c = 0; c < 9; c++) {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            cell.dataset.row = r;
+            cell.dataset.col = c;
+
+            // 3×3 box borders
+            if (c === 2 || c === 5) cell.classList.add('box-right');
+            if (r === 2 || r === 5) cell.classList.add('box-bottom');
+
+            const val = userBoard[r][c];
+            const noteBits = notesBoard[r][c];
+
+            if (val !== 0) {
+              cell.textContent = val;
+              if (givenMask[r][c]) {
+                cell.classList.add('given');
+              } else {
+                cell.classList.add('user');
+              }
+            } else if (noteBits !== 0) {
+              // Render notes grid
+              const grid = document.createElement('div');
+              grid.className = 'notes-grid';
+              for (let n = 1; n <= 9; n++) {
+                const span = document.createElement('span');
+                if (noteBits & (1 << (n - 1))) {
+                  span.textContent = n;
+                }
+                grid.appendChild(span);
+              }
+              cell.appendChild(grid);
+            }
+
+            // Selection highlight
+            if (r === selectedRow && c === selectedCol) {
+              cell.classList.add('selected');
+            } else if (selectedRow >= 0 && selectedCol >= 0) {
+              // Same row, column, or 3×3 box
+              const sameRow = r === selectedRow;
+              const sameCol = c === selectedCol;
+              const sameBox =
+                Math.floor(r / 3) === Math.floor(selectedRow / 3) &&
+                Math.floor(c / 3) === Math.floor(selectedCol / 3);
+              if (sameRow || sameCol || sameBox) {
+                cell.classList.add('highlighted');
+              }
+            }
+
+            // Same-number highlight
+            if (
+              selectedRow >= 0 && selectedCol >= 0 &&
+              val !== 0 &&
+              val === userBoard[selectedRow][selectedCol] &&
+              !(r === selectedRow && c === selectedCol)
+            ) {
+              cell.classList.add('same-number');
+            }
+
+            // Error highlight
+            if (errorCells.has(r + ',' + c)) {
+              cell.classList.add('error');
+            }
+
+            // Click handler
+            cell.addEventListener('click', () => selectCell(r, c));
+
+            boardEl.appendChild(cell);
+          }
+        }
+      }
+
+      /* ──────────── CELL SELECTION ──────────── */
+      function selectCell(r, c) {
+        if (isComplete) return;
+        if (givenMask[r][c]) {
+          // If already selected a given, deselect
+          if (selectedRow === r && selectedCol === c) {
+            selectedRow = -1;
+            selectedCol = -1;
+          } else {
+            selectedRow = r;
+            selectedCol = c;
+          }
+        } else {
+          if (selectedRow === r && selectedCol === c) {
+            selectedRow = -1;
+            selectedCol = -1;
+          } else {
+            selectedRow = r;
+            selectedCol = c;
+          }
+        }
+        // Clear errors on new selection
+        if (errorCells.size > 0) {
+          errorCells = new Set();
+        }
+        renderBoard();
+        updateNumpadCounts();
+      }
+
+      /* ──────────── PLACE NUMBER ──────────── */
+      function placeNumber(num) {
+        if (isComplete) return;
+        if (selectedRow < 0 || selectedCol < 0) return;
+        if (givenMask[selectedRow][selectedCol]) return;
+
+        const r = selectedRow;
+        const c = selectedCol;
+
+        // Snapshot full units before change (only for normal mode placements)
+        const before = (!notesMode && num !== 0) ? getFullUnits() : null;
+
+        if (notesMode) {
+          // In notes mode, toggle the note bit for the number
+          if (num >= 1 && num <= 9) {
+            const bit = 1 << (num - 1);
+            // If adding the note (not already set), check peers for conflicts
+            if (!(notesBoard[r][c] & bit) && isNumberPlacedInPeers(num, r, c)) {
+              // Number already placed in row/col/box — don't add this note
+            } else {
+              notesBoard[r][c] ^= bit; // toggle
+            }
+            // If cell has a value, clear it when adding notes
+            if (userBoard[r][c] !== 0) {
+              userBoard[r][c] = 0;
+            }
+          } else if (num === 0) {
+            // Erase clears all notes for this cell
+            notesBoard[r][c] = 0;
+          }
+        } else {
+          // Normal mode: place the number and clear notes
+          userBoard[r][c] = num;
+          if (num !== 0) {
+            notesBoard[r][c] = 0; // clear notes when placing a value
+            // Auto-remove this number from notes in same row, column, and 3×3 box
+            clearNotesForNumber(num, r, c);
+          } else {
+            notesBoard[r][c] = 0; // clear notes on erase too
+          }
+        }
+
+        // Clear errors
+        if (errorCells.size > 0) {
+          errorCells = new Set();
+          winOverlay.classList.remove('show');
+        }
+
+        renderBoard();
+        updateNumpadCounts();
+
+        // Detect newly-completed rows/columns/boxes and animate
+        if (before) {
+          const after = getFullUnits();
+          const newRows = new Set([...after.rows].filter(rr => !before.rows.has(rr)));
+          const newCols = new Set([...after.cols].filter(cc => !before.cols.has(cc)));
+          const newBoxes = new Set([...after.boxes].filter(b => !before.boxes.has(b)));
+          if (newRows.size > 0 || newCols.size > 0 || newBoxes.size > 0) {
+            animateCompletedUnits(newRows, newCols, newBoxes);
+          }
+        }
+
+        saveStateToHash();
+
+        // Auto-check if board is fully filled (only in normal mode)
+        if (!notesMode && isBoardFull()) {
+          autoCheck();
+        }
+      }
+
+      /** Remove `num` from notes in same row, column, and 3×3 box as (r,c). */
+      function clearNotesForNumber(num, r, c) {
+        const bit = 1 << (num - 1);
+        const boxR0 = Math.floor(r / 3) * 3;
+        const boxC0 = Math.floor(c / 3) * 3;
+        // Same row
+        for (let cc = 0; cc < 9; cc++) {
+          if (notesBoard[r][cc] & bit) notesBoard[r][cc] ^= bit;
+        }
+        // Same column
+        for (let rr = 0; rr < 9; rr++) {
+          if (notesBoard[rr][c] & bit) notesBoard[rr][c] ^= bit;
+        }
+        // Same 3×3 box
+        for (let br = 0; br < 3; br++) {
+          for (let bc = 0; bc < 3; bc++) {
+            if (notesBoard[boxR0 + br][boxC0 + bc] & bit) {
+              notesBoard[boxR0 + br][boxC0 + bc] ^= bit;
+            }
+          }
+        }
+      }
+
+      /** Check if `num` already appears as a placed value in the same row, col, or 3×3 box as (r,c). */
+      function isNumberPlacedInPeers(num, r, c) {
+        // Same row
+        for (let cc = 0; cc < 9; cc++) {
+          if (cc !== c && userBoard[r][cc] === num) return true;
+        }
+        // Same column
+        for (let rr = 0; rr < 9; rr++) {
+          if (rr !== r && userBoard[rr][c] === num) return true;
+        }
+        // Same 3×3 box
+        const boxR0 = Math.floor(r / 3) * 3;
+        const boxC0 = Math.floor(c / 3) * 3;
+        for (let br = 0; br < 3; br++) {
+          for (let bc = 0; bc < 3; bc++) {
+            const rr = boxR0 + br, cc = boxC0 + bc;
+            if ((rr !== r || cc !== c) && userBoard[rr][cc] === num) return true;
+          }
+        }
+        return false;
+      }
+
+      function isBoardFull() {
+        for (let r = 0; r < 9; r++) {
+          for (let c = 0; c < 9; c++) {
+            if (userBoard[r][c] === 0) return false;
+          }
+        }
+        return true;
+      }
+
+      /* ──────────── ROW / COL / BOX COMPLETION DETECTION ──────────── */
+
+      function isRowFull(r) {
+        for (let c = 0; c < 9; c++) {
+          if (userBoard[r][c] === 0) return false;
+        }
+        return true;
+      }
+
+      function isColFull(c) {
+        for (let r = 0; r < 9; r++) {
+          if (userBoard[r][c] === 0) return false;
+        }
+        return true;
+      }
+
+      function isBoxFull(br, bc) {
+        const r0 = br * 3;
+        const c0 = bc * 3;
+        for (let r = r0; r < r0 + 3; r++) {
+          for (let c = c0; c < c0 + 3; c++) {
+            if (userBoard[r][c] === 0) return false;
+          }
+        }
+        return true;
+      }
+
+      /** Return sets of currently-full rows, columns, and boxes. */
+      function getFullUnits() {
+        const rows = new Set();
+        const cols = new Set();
+        const boxes = new Set();
+        for (let r = 0; r < 9; r++) {
+          if (isRowFull(r)) rows.add(r);
+        }
+        for (let c = 0; c < 9; c++) {
+          if (isColFull(c)) cols.add(c);
+        }
+        for (let br = 0; br < 3; br++) {
+          for (let bc = 0; bc < 3; bc++) {
+            if (isBoxFull(br, bc)) boxes.add(br + ',' + bc);
+          }
+        }
+        return { rows, cols, boxes };
+      }
+
+      /** Apply pop animation to cells in newly-completed rows/cols/boxes. */
+      function animateCompletedUnits(newRows, newCols, newBoxes) {
+        const cells = boardEl.querySelectorAll('.cell');
+        cells.forEach(cell => {
+          const r = parseInt(cell.dataset.row, 10);
+          const c = parseInt(cell.dataset.col, 10);
+          const br = Math.floor(r / 3);
+          const bc = Math.floor(c / 3);
+          if (newRows.has(r) || newCols.has(c) || newBoxes.has(br + ',' + bc)) {
+            // Remove and re-add to restart animation if already present
+            cell.classList.remove('pop');
+            void cell.offsetWidth; // force reflow
+            cell.classList.add('pop');
+            // Clean up after animation
+            cell.addEventListener('animationend', function handler() {
+              cell.classList.remove('pop');
+              cell.removeEventListener('animationend', handler);
+            }, { once: true });
+          }
+        });
+      }
+
+      /* ──────────── TIMER ──────────── */
+      function formatTime(ms) {
+        const totalSec = Math.floor(ms / 1000);
+        const min = Math.floor(totalSec / 60);
+        const sec = totalSec % 60;
+        return String(min).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+      }
+
+      function startTimer() {
+        startTime = Date.now();
+      }
+
+      function stopTimer() {
+        // no-op — just keep startTime for the win banner
+      }
+
+      function getElapsed() {
+        if (!startTime) return 0;
+        return Date.now() - startTime;
+      }
+
+      function showWinBanner() {
+        const elapsed = getElapsed();
+        const timeStr = formatTime(elapsed);
+        const diffLabel = Sudoku.DIFFICULTIES[currentDifficulty]?.label || currentDifficulty;
+        winDiffBadge.textContent = diffLabel;
+        winStats.innerHTML = 'Time: <span>' + timeStr + '</span> &nbsp;·&nbsp; Checks: <span>' + checkCount + '</span>';
+        winOverlay.classList.add('show');
+        spawnConfetti();
+      }
+
+      function spawnConfetti() {
+        const container = winConfetti;
+        const colors = ['#38bdf8','#22d3ee','#818cf8','#f472b6','#fbbf24','#34d399','#fb923c','#a78bfa'];
+        const frag = document.createDocumentFragment();
+        for (let i = 0; i < 60; i++) {
+          const piece = document.createElement('div');
+          piece.className = 'confetti-piece';
+          piece.style.left = Math.random() * 100 + '%';
+          piece.style.top = -(Math.random() * 30 + 5) + 'px';
+          piece.style.width = (Math.random() * 8 + 5) + 'px';
+          piece.style.height = (Math.random() * 8 + 5) + 'px';
+          piece.style.background = colors[Math.floor(Math.random() * colors.length)];
+          piece.style.animationDuration = (Math.random() * 2 + 1.8) + 's';
+          piece.style.animationDelay = Math.random() * 0.6 + 's';
+          piece.style.borderRadius = Math.random() > 0.5 ? '50%' : '2px';
+          frag.appendChild(piece);
+        }
+        container.innerHTML = '';
+        container.appendChild(frag);
+      }
+
+      function autoCheck() {
+        const result = Sudoku.checkSolution(userBoard, solution);
+        if (result.correct) {
+          isComplete = true;
+          stopTimer();
+          showWinBanner();
+          selectedRow = -1;
+          selectedCol = -1;
+        } else {
+          errorCells = new Set(result.errors.map(e => e.row + ',' + e.col));
+        }
+        renderBoard();
+      }
+
+      /* ──────────── CHECK BUTTON ──────────── */
+      function doCheck() {
+        if (isComplete) return;
+        checkCount++;
+
+        // Run the solver-based check
+        const result = Sudoku.checkSolution(userBoard, solution);
+        errorCells = new Set(result.errors.map(e => e.row + ',' + e.col));
+
+        if (result.correct) {
+          isComplete = true;
+          stopTimer();
+          showWinBanner();
+          selectedRow = -1;
+          selectedCol = -1;
+          errorCells = new Set();
+        } else if (result.hasErrors) {
+          winOverlay.classList.remove('show');
+        } else {
+          // No errors — show a flying thumbs-up
+          showThumbsUp();
+        }
+
+        renderBoard();
+        updateNumpadCounts();
+        saveStateToHash();
+      }
+
+      function showThumbsUp() {
+        // Remove any existing thumbs-up
+        const existing = document.querySelector('.thumbs-up-fly');
+        if (existing) existing.remove();
+
+        const el = document.createElement('div');
+        el.className = 'thumbs-up-fly';
+        el.textContent = '👍';
+        document.querySelector('.board-wrap').appendChild(el);
+
+        el.addEventListener('animationend', () => el.remove(), { once: true });
+      }
+
+      /* ──────────── START OVER ──────────── */
+      function doStartOver() {
+        if (isComplete) {
+          // Already won — nothing to start over, start a new game instead
+          startNewGame();
+          return;
+        }
+        // Reset user-filled cells back to the original puzzle
+        for (let r = 0; r < 9; r++) {
+          for (let c = 0; c < 9; c++) {
+            userBoard[r][c] = puzzle[r][c];
+            notesBoard[r][c] = 0;
+          }
+        }
+        selectedRow = -1;
+        selectedCol = -1;
+        checkCount = 0;
+        errorCells = new Set();
+        notesMode = false;
+        startTimer();
+        winOverlay.classList.remove('show');
+        const nb = document.getElementById('btnNotes');
+        if (nb) nb.className = 'num-btn util notes-toggle';
+        renderBoard();
+        updateNumpadCounts();
+        saveStateToHash();
+      }
+
+      /* ──────────── SHARE ──────────── */
+      function doShare() {
+        // Share the full URL including game state in the hash
+        const url = location.href;
+        navigator.clipboard.writeText(url).then(() => {
+          btnShare.classList.add('copied');
+          btnShare.textContent = '✓';
+          setTimeout(() => {
+            btnShare.classList.remove('copied');
+            btnShare.textContent = '🔗';
+          }, 1500);
+        }).catch(() => {
+          // Fallback for older browsers
+          const input = document.createElement('input');
+          input.value = url;
+          document.body.appendChild(input);
+          input.select();
+          document.execCommand('copy');
+          document.body.removeChild(input);
+          btnShare.classList.add('copied');
+          btnShare.textContent = '✓';
+          setTimeout(() => {
+            btnShare.classList.remove('copied');
+            btnShare.textContent = '🔗';
+          }, 1500);
+        });
+      }
+
+      /* ──────────── IMPORT ──────────── */
+      function doImport() {
+        const raw = prompt('Paste a Sudoku puzzle URL to import:');
+        if (!raw) return;
+        let hash = raw.trim();
+        // If a full URL was pasted, extract just the hash part
+        const hashIdx = hash.indexOf('#');
+        if (hashIdx >= 0) {
+          hash = hash.slice(hashIdx + 1);
+        }
+        // Set the hash and reload state
+        history.replaceState(null, '', '#' + hash);
+        if (loadStateFromHash()) {
+          const nb2 = document.getElementById('btnNotes');
+          if (nb2) nb2.className = 'num-btn util notes-toggle' + (notesMode ? ' active' : '');
+          renderBoard();
+          updateNumpadCounts();
+          btnImport.classList.add('copied');
+          btnImport.textContent = '✓';
+          setTimeout(() => {
+            btnImport.classList.remove('copied');
+            btnImport.textContent = '📥';
+          }, 1200);
+        } else {
+          alert('Could not parse that puzzle. Make sure the URL or hash is valid.');
+        }
+      }
+
+      /* ──────────── NEW GAME ──────────── */
+      function startNewGame() {
+        const generated = Sudoku.generatePuzzle(currentDifficulty);
+        puzzle       = generated.puzzle;
+        puzzle._seed = generated.seed;   // tuck seed onto puzzle for persistence
+        solution     = generated.solution;
+        userBoard    = Sudoku.cloneBoard(puzzle);
+        givenMask    = puzzle.map(row => row.map(v => v !== 0));
+        notesBoard   = Sudoku.emptyBoard().map(row => row.map(() => 0));
+        notesMode    = false;
+        selectedRow  = -1;
+        selectedCol  = -1;
+        checkCount   = 0;
+        errorCells   = new Set();
+        isComplete   = false;
+
+        // Update notes toggle button
+        const nb = document.getElementById('btnNotes');
+        if (nb) nb.className = 'num-btn util notes-toggle';
+
+        startTimer();
+        winOverlay.classList.remove('show');
+        renderBoard();
+        updateNumpadCounts();
+        saveStateToHash();
+      }
+
+      /* ──────────── KEYBOARD SUPPORT ──────────── */
+      function handleKeydown(e) {
+        if (diffModal.classList.contains('show')) return;
+        if (isComplete) return;
+
+        // 'N' toggles notes mode
+        if (e.key === 'n' || e.key === 'N') {
+          e.preventDefault();
+          toggleNotesMode();
+          return;
+        }
+
+        // Shift+number for quick note entry (works regardless of notesMode)
+        if (e.shiftKey && e.key >= '1' && e.key <= '9') {
+          e.preventDefault();
+          if (selectedRow < 0 || selectedCol < 0) return;
+          if (givenMask[selectedRow][selectedCol]) return;
+          const num = parseInt(e.key, 10);
+          const bit = 1 << (num - 1);
+          // If adding the note (not already set), check peers for conflicts
+          if (!(notesBoard[selectedRow][selectedCol] & bit) && isNumberPlacedInPeers(num, selectedRow, selectedCol)) {
+            // Number already placed in row/col/box — don't add this note
+          } else {
+            notesBoard[selectedRow][selectedCol] ^= bit;
+          }
+          if (userBoard[selectedRow][selectedCol] !== 0) {
+            userBoard[selectedRow][selectedCol] = 0;
+          }
+          if (errorCells.size > 0) {
+            errorCells = new Set();
+            winOverlay.classList.remove('show');
+          }
+          renderBoard();
+          updateNumpadCounts();
+          saveStateToHash();
+          return;
+        }
+
+        // Number keys
+        if (e.key >= '1' && e.key <= '9') {
+          e.preventDefault();
+          placeNumber(parseInt(e.key, 10));
+          return;
+        }
+        // Delete / Backspace / 0
+        if (e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') {
+          e.preventDefault();
+          placeNumber(0);
+          return;
+        }
+        // Arrow keys for navigation
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+          e.preventDefault();
+          let r = selectedRow;
+          let c = selectedCol;
+          if (r < 0 || c < 0) { r = 0; c = 0; }
+          else {
+            if (e.key === 'ArrowUp')    r = Math.max(0, r - 1);
+            if (e.key === 'ArrowDown')  r = Math.min(8, r + 1);
+            if (e.key === 'ArrowLeft')  c = Math.max(0, c - 1);
+            if (e.key === 'ArrowRight') c = Math.min(8, c + 1);
+          }
+          selectCell(r, c);
+          return;
+        }
+        // Escape to clear errors (keep selection)
+        if (e.key === 'Escape') {
+          if (errorCells.size > 0) errorCells = new Set();
+          renderBoard();
+          updateNumpadCounts();
+        }
+      }
+
+      /* ──────────── HASH PERSISTENCE ──────────── */
+
+      /** Encode full game state to URL query params in the hash. */
+      function saveStateToHash() {
+        if (!puzzle || !solution) return;
+
+        const params = [];
+        params.push('seed=' + puzzle._seed);
+        params.push('difficulty=' + currentDifficulty);
+
+        let selection = '';
+        let notes = '';
+        for (let r = 0; r < 9; r++) {
+          for (let c = 0; c < 9; c++) {
+            if (!givenMask[r][c] && userBoard[r][c] !== 0) {
+              selection += (r + 1) + '' + (c + 1) + '' + userBoard[r][c];
+            }
+            if (notesBoard[r][c] !== 0) {
+              notes += (r + 1) + '' + (c + 1) + '' + String(notesBoard[r][c]).padStart(3, '0');
+            }
+          }
+        }
+        if (selection) params.push('selection=' + selection);
+        if (notes) params.push('notes=' + notes);
+
+        if (notesMode) params.push('notesMode=1');
+        if (checkCount > 0) params.push('checks=' + checkCount);
+        if (isComplete) params.push('complete=1');
+
+        history.replaceState(null, '', '#' + params.join('&'));
+      }
+
+      /** Try to restore state from URL hash. Returns true if successful. */
+      function loadStateFromHash() {
+        try {
+          const raw = location.hash.slice(1);
+          const entries = raw.split('&').map(s => {
+            const eq = s.indexOf('=');
+            return [s.slice(0, eq), decodeURIComponent(s.slice(eq + 1))];
+          });
+          const params = Object.fromEntries(entries);
+
+          const seed = parseInt(params.seed, 10);
+          if (isNaN(seed)) return false;
+          const difficulty = params.difficulty;
+          if (!Sudoku.DIFFICULTIES[difficulty]) return false;
+
+          const generated = Sudoku.generatePuzzle(difficulty, seed);
+          currentDifficulty = difficulty;
+          puzzle       = generated.puzzle;
+          puzzle._seed = seed;
+          solution     = generated.solution;
+          userBoard    = Sudoku.cloneBoard(puzzle);
+          givenMask    = puzzle.map(row => row.map(v => v !== 0));
+          notesBoard   = Sudoku.emptyBoard().map(row => row.map(() => 0));
+
+          if (params.selection) {
+            const s = params.selection;
+            for (let i = 0; i + 2 < s.length; i += 3) {
+              const row = parseInt(s[i], 10) - 1;
+              const col = parseInt(s[i + 1], 10) - 1;
+              const val = parseInt(s[i + 2], 10);
+              if (row >= 0 && row < 9 && col >= 0 && col < 9 && val >= 1 && val <= 9 && !givenMask[row][col]) {
+                userBoard[row][col] = val;
+              }
+            }
+          }
+
+          if (params.notes) {
+            const n = params.notes;
+            for (let i = 0; i + 4 < n.length; i += 5) {
+              const row = parseInt(n[i], 10) - 1;
+              const col = parseInt(n[i + 1], 10) - 1;
+              const mask = parseInt(n.slice(i + 2, i + 5), 10);
+              if (row >= 0 && row < 9 && col >= 0 && col < 9 && mask >= 0 && mask <= 511) {
+                notesBoard[row][col] = mask;
+              }
+            }
+          }
+
+          selectedRow = -1;
+          selectedCol = -1;
+
+          notesMode    = params.notesMode === '1';
+          checkCount   = parseInt(params.checks, 10) || 0;
+          isComplete   = params.complete === '1';
+          errorCells   = new Set();
+
+          if (isComplete) {
+            stopTimer();
+            const diffLabel2 = Sudoku.DIFFICULTIES[currentDifficulty]?.label || currentDifficulty;
+            winDiffBadge.textContent = diffLabel2;
+            winStats.innerHTML = 'Checks: <span>' + checkCount + '</span>';
+            winOverlay.classList.add('show');
+            spawnConfetti();
+          } else {
+            startTimer();
+            winOverlay.classList.remove('show');
+          }
+
+          if (!isComplete && isBoardFull()) {
+            const result = Sudoku.checkSolution(userBoard, solution);
+            if (result.correct) {
+              isComplete = true;
+              stopTimer();
+              showWinBanner();
+            }
+          }
+
+          return true;
+        } catch (e) {
+          console.warn('Could not restore Sudoku state from hash:', e);
+          return false;
+        }
+      }
+
+      /* ──────────── INIT ──────────── */
+      function init() {
+        buildNumpad();
+
+        // Try restoring from URL hash, otherwise start fresh
+        if (!loadStateFromHash()) {
+          startNewGame();
+        }
+
+        // Update notes toggle button
+        const nb = document.getElementById('btnNotes');
+        if (nb) nb.className = 'num-btn util notes-toggle' + (notesMode ? ' active' : '');
+
+        renderBoard();
+        updateNumpadCounts();
+
+        btnStartOver.addEventListener('click', doStartOver);
+        btnShare.addEventListener('click', doShare);
+        btnImport.addEventListener('click', doImport);
+        btnNew.addEventListener('click', showNewGameDialog);
+        diffCancel.addEventListener('click', hideNewGameDialog);
+        diffModal.addEventListener('click', (e) => {
+          if (e.target === diffModal) hideNewGameDialog();
+        });
+        document.addEventListener('keydown', handleKeydown);
+
+        // SlopOS theme change handler — re-render on theme change
+        if (window.SlopOS && window.SlopOS.on) {
+          window.SlopOS.on('themechange', () => {
+            renderBoard();
+            updateNumpadCounts();
+          });
+        }
+
+        // Listen for hash changes (e.g. back/forward)
+        window.addEventListener('hashchange', () => {
+          if (loadStateFromHash()) {
+            const nb2 = document.getElementById('btnNotes');
+            if (nb2) nb2.className = 'num-btn util notes-toggle' + (notesMode ? ' active' : '');
+            renderBoard();
+            updateNumpadCounts();
+          }
+        });
+      }
+
+      init();
+
+    })();
+  </script>
 </body>
 </html>
