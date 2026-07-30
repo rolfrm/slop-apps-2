@@ -1,8 +1,8 @@
 {
   "apps": [
     {
-      "id": "095lmkb83p5y",
-      "name": "Sudoku",
+      "id": "w7i1dbqnlylp",
+      "name": "Stock Tracker",
       "folder": "stock-tracker",
       "description": "App pushed from SlopOS"
     },
