@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <style>
+    /* ── Dark theme (default) ── */
+    @media (prefers-color-scheme: dark) {
+      .bg      { fill: #0f1923; }
+      .grid    { stroke: #38bdf8; }
+      .given   { fill: #e0e8f0; }
+      .user    { fill: #38bdf8; }
+    }
+    /* ── Light theme ── */
+    @media (prefers-color-scheme: light) {
+      .bg      { fill: #f8fafc; }
+      .grid    { stroke: #0284c7; }
+      .given   { fill: #0f172a; }
+      .user    { fill: #0284c7; }
+    }
+  </style>
+
+  <!-- Solid iOS-style rounded background -->
+  <rect x="0" y="0" width="64" height="64" rx="14" class="bg"/>
+
+  <!-- Sudoku grid outer border -->
+  <rect x="8" y="8" width="48" height="48" rx="5" class="grid" stroke-width="2"/>
+
+  <!-- 3×3 box dividing lines (thick) -->
+  <line x1="24" y1="8"  x2="24" y2="56" class="grid" stroke-width="2"/>
+  <line x1="40" y1="8"  x2="40" y2="56" class="grid" stroke-width="2"/>
+  <line x1="8"  y1="24" x2="56" y2="24" class="grid" stroke-width="2"/>
+  <line x1="8"  y1="40" x2="56" y2="40" class="grid" stroke-width="2"/>
+
+  <!-- Numbers: "given" = pre-filled, "user" = accent -->
+  <text x="16" y="20" text-anchor="middle" font-size="10" font-family="sans-serif" font-weight="bold" class="given">5</text>
+  <text x="48" y="20" text-anchor="middle" font-size="10" font-family="sans-serif" font-weight="bold" class="user">3</text>
+  <text x="16" y="36" text-anchor="middle" font-size="10" font-family="sans-serif" font-weight="bold" class="user">7</text>
+  <text x="48" y="36" text-anchor="middle" font-size="10" font-family="sans-serif" font-weight="bold" class="given">8</text>
+  <text x="32" y="52" text-anchor="middle" font-size="10" font-family="sans-serif" font-weight="bold" class="given">2</text>
+  <text x="48" y="52" text-anchor="middle" font-size="10" font-family="sans-serif" font-weight="bold" class="user">6</text>
+</svg>
