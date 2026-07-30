@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/svg+xml" href="./icon.svg">
+  <title>Time Zone Converter</title>
+  <script src="/slop-os.js"></script>
+  <link rel="stylesheet" href="/styles.css">
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    :root[data-mode="dark"] {
+      --sl-wallpaper: radial-gradient(circle at top left, rgba(56, 189, 248, 0.12), transparent 34%),
+        linear-gradient(180deg, #0a1320 0%, #060b12 100%);
+    }
+    :root[data-mode="light"] {
+      --sl-wallpaper: radial-gradient(circle at top left, color-mix(in srgb, var(--sl-accent, #1f6bd0) 10%, transparent), transparent 34%),
+        var(--sl-surface, #f5f8fc);
+    }
+
+    .panel {
+      max-width: 720px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin: 0 0 4px;
+      font-size: 26px;
+      letter-spacing: -0.02em;
+    }
+
+    .subtitle {
+      margin: 0 0 20px;
+      font-size: 14px;
+      color: var(--sl-text-muted, #94a3b8);
+      line-height: 1.5;
+    }
+
+    /* Source card */
+    .source-card {
+      padding: 18px 20px;
+      border-radius: var(--sl-radius, 14px);
+      background: var(--sl-raised, rgba(15, 23, 42, 0.76));
+      border: 1px solid var(--sl-border-soft, rgba(148, 163, 184, 0.12));
+      margin-bottom: 20px;
+    }
+
+    .source-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .time-input-group {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .time-input-group input {
+      width: 48px;
+      padding: 8px 6px;
+      text-align: center;
+      font-size: 20px;
+      font-family: inherit;
+      font-weight: 600;
+      border-radius: 8px;
+      border: 1px solid var(--sl-border, rgba(125, 211, 252, 0.18));
+      background: var(--sl-surface, rgba(10, 19, 32, 0.9));
+      color: var(--sl-text, #e0e8f0);
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .time-input-group input:focus {
+      border-color: var(--sl-accent, #38bdf8);
+    }
+
+    .time-colon {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--sl-text-muted, #94a3b8);
+    }
+
+    select {
+      padding: 8px 12px;
+      font-size: 14px;
+      font-family: inherit;
+      border-radius: 8px;
+      border: 1px solid var(--sl-border, rgba(125, 211, 252, 0.18));
+      background: var(--sl-surface, rgba(10, 19, 32, 0.9));
+      color: var(--sl-text, #e0e8f0);
+      outline: none;
+      cursor: pointer;
+      max-width: 240px;
+      appearance: auto;
+    }
+
+    select:focus {
+      border-color: var(--sl-accent, #38bdf8);
+    }
+
+    .ampm-btn {
+      padding: 8px 14px;
+      font-size: 14px;
+      font-family: inherit;
+      font-weight: 600;
+      border-radius: 8px;
+      border: 1px solid var(--sl-border, rgba(125, 211, 252, 0.18));
+      background: var(--sl-surface, rgba(10, 19, 32, 0.9));
+      color: var(--sl-text-muted, #94a3b8);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .ampm-btn.active {
+      color: var(--sl-accent, #38bdf8);
+      border-color: var(--sl-accent, #38bdf8);
+      background: var(--sl-raised, rgba(12, 74, 110, 0.32));
+    }
+
+    .btn {
+      padding: 8px 16px;
+      font-size: 13px;
+      font-family: inherit;
+      font-weight: 600;
+      border-radius: 8px;
+      border: 1px solid var(--sl-border, rgba(125, 211, 252, 0.18));
+      background: var(--sl-raised, rgba(12, 74, 110, 0.32));
+      color: var(--sl-accent, #7dd3fc);
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+
+    .btn:hover {
+      background: rgba(56, 189, 248, 0.15);
+    }
+
+    .btn-now {
+      padding: 8px 16px;
+      font-size: 13px;
+      font-family: inherit;
+      font-weight: 600;
+      border-radius: 8px;
+      border: 1px solid var(--sl-accent, rgba(56, 189, 248, 0.4));
+      background: rgba(56, 189, 248, 0.1);
+      color: var(--sl-accent, #38bdf8);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn-now:hover {
+      background: rgba(56, 189, 248, 0.2);
+    }
+
+    .btn-primary {
+      background: var(--sl-accent, #38bdf8);
+      color: #0a1320;
+      border-color: var(--sl-accent, #38bdf8);
+      font-weight: 600;
+    }
+
+    .btn-primary:hover {
+      opacity: 0.9;
+    }
+
+    .btn-cancel {
+      background: transparent;
+      color: var(--sl-text-muted, #94a3b8);
+      border: 1px solid var(--sl-border, rgba(125, 211, 252, 0.18));
+    }
+
+    .btn-cancel:hover {
+      background: rgba(148, 163, 184, 0.08);
+    }
+
+    /* Results */
+    .results-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .results-header h2 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+
+    .zone-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .zone-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 18px;
+      border-radius: 12px;
+      background: var(--sl-raised, rgba(15, 23, 42, 0.76));
+      border: 1px solid var(--sl-border-soft, rgba(148, 163, 184, 0.12));
+      gap: 12px;
+    }
+
+    .zone-info {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .zone-name {
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .zone-region {
+      font-size: 12px;
+      color: var(--sl-text-muted, #94a3b8);
+      margin-top: 1px;
+    }
+
+    .zone-offset {
+      font-size: 11px;
+      color: var(--sl-text-muted, #94a3b8);
+      margin-top: 1px;
+    }
+
+    .zone-time {
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    .zone-time-main {
+      font-size: 22px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.02em;
+    }
+
+    .zone-time-date {
+      font-size: 12px;
+      color: var(--sl-text-muted, #94a3b8);
+      margin-top: 1px;
+    }
+
+    .remove-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: none;
+      background: transparent;
+      color: var(--sl-text-muted, #94a3b8);
+      cursor: pointer;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: all 0.15s;
+      line-height: 1;
+    }
+
+    .remove-btn:hover {
+      background: rgba(239, 68, 68, 0.15);
+      color: #ef4444;
+    }
+
+    /* Add button area */
+    .add-area {
+      margin-top: 14px;
+    }
+
+    /* Date diff indicator */
+    .day-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 6px;
+      margin-left: 6px;
+    }
+
+    .day-ahead {
+      background: rgba(34, 197, 94, 0.12);
+      color: #22c55e;
+    }
+
+    .day-behind {
+      background: rgba(239, 68, 68, 0.12);
+      color: #ef4444;
+    }
+
+    /* ── Modal ──────────────────────────────────── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 20px;
+    }
+
+    .modal-overlay.hidden {
+      display: none;
+    }
+
+    .modal {
+      background: var(--sl-surface, #0f1923);
+      border: 1px solid var(--sl-border, rgba(125, 211, 252, 0.18));
+      border-radius: var(--sl-radius, 14px);
+      padding: 24px;
+      width: 100%;
+      max-width: 420px;
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .modal h3 {
+      margin: 0;
+      font-size: 18px;
+      letter-spacing: -0.01em;
+    }
+
+    .modal label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--sl-text-muted, #94a3b8);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+    }
+
+    .modal select {
+      width: 100%;
+      max-width: none;
+      padding: 10px 12px;
+      font-size: 14px;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 4px;
+    }
+
+    /* Cities scrollable list */
+    .city-list {
+      max-height: 240px;
+      overflow-y: auto;
+      border-radius: 8px;
+      border: 1px solid var(--sl-border-soft, rgba(148, 163, 184, 0.12));
+      background: var(--sl-raised, rgba(15, 23, 42, 0.76));
+    }
+
+    .city-option {
+      display: block;
+      width: 100%;
+      padding: 10px 14px;
+      background: none;
+      border: none;
+      color: var(--sl-text, #e0e8f0);
+      font-size: 14px;
+      font-family: inherit;
+      text-align: left;
+      cursor: pointer;
+      transition: background 0.1s;
+      border-bottom: 1px solid var(--sl-border-soft, rgba(148, 163, 184, 0.06));
+    }
+
+    .city-option:last-child {
+      border-bottom: none;
+    }
+
+    .city-option:hover {
+      background: rgba(56, 189, 248, 0.08);
+    }
+
+    .city-option.selected {
+      background: rgba(56, 189, 248, 0.15);
+      color: var(--sl-accent, #38bdf8);
+      font-weight: 600;
+    }
+
+    .city-option .city-offset {
+      float: right;
+      font-size: 12px;
+      color: var(--sl-text-muted, #94a3b8);
+      margin-left: 8px;
+    }
+
+    /* Back link in modal */
+    .modal .back-link {
+      font-size: 13px;
+      color: var(--sl-accent, #38bdf8);
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 0;
+      font-family: inherit;
+      align-self: flex-start;
+    }
+
+    .modal .back-link:hover {
+      text-decoration: underline;
+    }
+
+    /* Responsive */
+    @media (max-width: 500px) {
+      body { padding: 16px; }
+      .source-row { flex-direction: column; align-items: stretch; }
+      .time-input-group { justify-content: center; }
+      select { max-width: none; }
+      .zone-time-main { font-size: 18px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="panel">
+    <h1>Time Zone Converter</h1>
+    <p class="subtitle">Enter a time in one zone and see it converted to others instantly.</p>
+
+    <!-- Source -->
+    <div class="source-card">
+      <div class="source-row">
+        <div class="time-input-group">
+          <input type="number" id="hours" min="1" max="12" value="12" aria-label="Hours">
+          <span class="time-colon">:</span>
+          <input type="number" id="minutes" min="0" max="59" value="00" aria-label="Minutes">
+        </div>
+        <button class="ampm-btn active" id="ampmBtn" aria-label="Toggle AM/PM">AM</button>
+        <select id="sourceTz" aria-label="Source time zone"></select>
+        <button class="btn-now" id="nowBtn">Now</button>
+      </div>
+    </div>
+
+    <!-- Results -->
+    <div class="results-header">
+      <h2>Converted times</h2>
+    </div>
+    <div class="zone-grid" id="zoneGrid"></div>
+
+    <!-- Add zone -->
+    <div class="add-area">
+      <button class="btn" id="addBtn">+ Add time zone</button>
+    </div>
+  </main>
+
+  <!-- ── Modal ──────────────────────────────────── -->
+  <div class="modal-overlay hidden" id="modalOverlay">
+    <div class="modal" id="modal">
+      <!-- Step 1: pick region -->
+      <div id="modalStepRegion">
+        <h3>Add time zone</h3>
+        <div>
+          <label for="regionSelect">Region</label>
+          <select id="regionSelect"></select>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-cancel" id="modalCancel1">Cancel</button>
+          <button class="btn btn-primary" id="modalNext">Next</button>
+        </div>
+      </div>
+      <!-- Step 2: pick city -->
+      <div id="modalStepCity" style="display:none;">
+        <button class="back-link" id="modalBack">← Back to regions</button>
+        <h3>Select city</h3>
+        <div class="city-list" id="cityList"></div>
+        <div class="modal-actions">
+          <button class="btn btn-cancel" id="modalCancel2">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ── Time zone data ──────────────────────────────────
+    const allTimeZones = Intl.supportedValuesOf('timeZone');
+
+    // Build region → cities map
+    function buildRegionMap() {
+      const map = new Map();
+      for (const tz of allTimeZones) {
+        const slash = tz.indexOf('/');
+        if (slash === -1) {
+          // e.g. "UTC"
+          if (!map.has('Other')) map.set('Other', []);
+          map.get('Other').push(tz);
+          continue;
+        }
+        const region = tz.slice(0, slash);
+        if (!map.has(region)) map.set(region, []);
+        map.get(region).push(tz);
+      }
+      // Sort each region's cities
+      for (const [, cities] of map) {
+        cities.sort();
+      }
+      return map;
+    }
+
+    const regionMap = buildRegionMap();
+    const regions = [...regionMap.keys()].sort();
+
+    function tzLabel(tz) {
+      const parts = tz.split('/');
+      const city = parts[parts.length - 1].replace(/_/g, ' ');
+      const region = parts.length > 1 ? parts[0].replace(/_/g, ' ') : '';
+      return { region: region || 'Other', city };
+    }
+
+    function tzOffset(tz, date) {
+      const d = date || new Date();
+      const utcStr = d.toLocaleString('en-US', { timeZone: 'UTC', hour12: false, hour: '2-digit', minute: '2-digit', year: 'numeric', month: '2-digit', day: '2-digit' });
+      const tzStr = d.toLocaleString('en-US', { timeZone: tz, hour12: false, hour: '2-digit', minute: '2-digit', year: 'numeric', month: '2-digit', day: '2-digit' });
+      const utcDate = new Date(utcStr + ' UTC');
+      const tzDate = new Date(tzStr + ' UTC');
+      const diffMs = tzDate - utcDate;
+      const diffMin = Math.round(diffMs / 60000);
+      const hours = Math.floor(Math.abs(diffMin) / 60);
+      const mins = Math.abs(diffMin) % 60;
+      const sign = diffMin >= 0 ? '+' : '\u2212';
+      return mins > 0 ? `UTC${sign}${hours}:${String(mins).padStart(2, '0')}` : `UTC${sign}${hours}`;
+    }
+
+    function formatTime(date, tz) {
+      const opts = { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true };
+      return date.toLocaleString('en-US', opts);
+    }
+
+    function formatDateShort(date, tz) {
+      const opts = { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' };
+      return date.toLocaleString('en-US', opts);
+    }
+
+    function getDateStr(date, tz) {
+      const opts = { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' };
+      return date.toLocaleString('en-US', opts);
+    }
+
+    // ── State ──────────────────────────────────────────
+    const userTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    let sourceTz = userTz;
+    let targetZones = ['America/New_York', 'Europe/London', 'Europe/Paris', 'Asia/Tokyo', 'Australia/Sydney'];
+    let isAM = true;
+
+    // ── DOM refs ───────────────────────────────────────
+    const hoursInput = document.getElementById('hours');
+    const minutesInput = document.getElementById('minutes');
+    const ampmBtn = document.getElementById('ampmBtn');
+    const sourceTzSelect = document.getElementById('sourceTz');
+    const zoneGrid = document.getElementById('zoneGrid');
+    const addBtn = document.getElementById('addBtn');
+    const nowBtn = document.getElementById('nowBtn');
+
+    // Modal refs
+    const modalOverlay = document.getElementById('modalOverlay');
+    const modalStepRegion = document.getElementById('modalStepRegion');
+    const modalStepCity = document.getElementById('modalStepCity');
+    const regionSelect = document.getElementById('regionSelect');
+    const cityList = document.getElementById('cityList');
+    const modalNext = document.getElementById('modalNext');
+    const modalBack = document.getElementById('modalBack');
+    const modalCancel1 = document.getElementById('modalCancel1');
+    const modalCancel2 = document.getElementById('modalCancel2');
+
+    // ── Populate source timezone select ─────────────────
+    function populateSourceSelect() {
+      sourceTzSelect.innerHTML = '';
+      for (const region of regions) {
+        const group = document.createElement('optgroup');
+        group.label = region;
+        for (const tz of regionMap.get(region)) {
+          const opt = document.createElement('option');
+          opt.value = tz;
+          const { city } = tzLabel(tz);
+          opt.textContent = city;
+          if (tz === sourceTz) opt.selected = true;
+          group.appendChild(opt);
+        }
+        sourceTzSelect.appendChild(group);
+      }
+    }
+
+    // ── Populate modal region select ────────────────────
+    function populateRegionSelect() {
+      regionSelect.innerHTML = '<option value="">Select a region…</option>';
+      for (const region of regions) {
+        const count = regionMap.get(region).length;
+        const opt = document.createElement('option');
+        opt.value = region;
+        opt.textContent = `${region.replace(/_/g, ' ')} (${count} zone${count > 1 ? 's' : ''})`;
+        regionSelect.appendChild(opt);
+      }
+    }
+
+    // ── Modal logic ────────────────────────────────────
+    function openModal() {
+      modalOverlay.classList.remove('hidden');
+      modalStepRegion.style.display = '';
+      modalStepCity.style.display = 'none';
+      regionSelect.value = '';
+      populateRegionSelect();
+    }
+
+    function closeModal() {
+      modalOverlay.classList.add('hidden');
+    }
+
+    function showCities(region) {
+      modalStepRegion.style.display = 'none';
+      modalStepCity.style.display = '';
+      const cities = regionMap.get(region) || [];
+      cityList.innerHTML = '';
+      const now = new Date();
+      for (const tz of cities) {
+        const { city } = tzLabel(tz);
+        const offset = tzOffset(tz, now);
+        const alreadyAdded = targetZones.includes(tz) || tz === sourceTz;
+        const btn = document.createElement('button');
+        btn.className = 'city-option';
+        if (alreadyAdded) btn.classList.add('selected');
+        btn.innerHTML = `${city}<span class="city-offset">${offset}</span>`;
+        if (!alreadyAdded) {
+          btn.addEventListener('click', () => {
+            targetZones.push(tz);
+            render();
+            closeModal();
+          });
+        }
+        cityList.appendChild(btn);
+      }
+    }
+
+    // Modal events
+    modalNext.addEventListener('click', () => {
+      const region = regionSelect.value;
+      if (!region) return;
+      showCities(region);
+    });
+
+    modalBack.addEventListener('click', () => {
+      modalStepCity.style.display = 'none';
+      modalStepRegion.style.display = '';
+    });
+
+    modalCancel1.addEventListener('click', closeModal);
+    modalCancel2.addEventListener('click', closeModal);
+    modalOverlay.addEventListener('click', (e) => {
+      if (e.target === modalOverlay) closeModal();
+    });
+
+    addBtn.addEventListener('click', openModal);
+
+    // ── Parse current input to a Date ──────────────────
+    function getInputDate() {
+      let h = parseInt(hoursInput.value) || 12;
+      let m = parseInt(minutesInput.value) || 0;
+      if (h < 1) h = 1;
+      if (h > 12) h = 12;
+      if (m < 0) m = 0;
+      if (m > 59) m = 59;
+      let h24 = h;
+      if (!isAM) {
+        h24 = h === 12 ? 12 : h + 12;
+      } else {
+        h24 = h === 12 ? 0 : h;
+      }
+      const now = new Date();
+      const dateStr = now.toLocaleString('en-US', { timeZone: sourceTz, year: 'numeric', month: '2-digit', day: '2-digit' });
+      const [month, day, year] = dateStr.split('/').map(Number);
+      return new Date(year, month - 1, day, h24, m, 0, 0);
+    }
+
+    // ── Render ─────────────────────────────────────────
+    function render() {
+      const inputDate = getInputDate();
+      const sourceDateStr = getDateStr(inputDate, sourceTz);
+
+      zoneGrid.innerHTML = '';
+
+      for (const tz of targetZones) {
+        const tzDateStr = getDateStr(inputDate, tz);
+        const timeStr = formatTime(inputDate, tz);
+        const dateLabel = formatDateShort(inputDate, tz);
+        const offset = tzOffset(inputDate, tz);
+        const { region, city } = tzLabel(tz);
+
+        let dayDiff = 0;
+        if (sourceDateStr !== tzDateStr) {
+          const sParts = sourceDateStr.split('/').map(Number);
+          const tParts = tzDateStr.split('/').map(Number);
+          const sDate = new Date(sParts[2], sParts[0] - 1, sParts[1]);
+          const tDate = new Date(tParts[2], tParts[0] - 1, tParts[1]);
+          dayDiff = Math.round((tDate - sDate) / 86400000);
+        }
+
+        let dayBadge = '';
+        if (dayDiff === 1) {
+          dayBadge = '<span class="day-indicator day-ahead">+1 day</span>';
+        } else if (dayDiff === -1) {
+          dayBadge = '<span class="day-indicator day-behind">\u22121 day</span>';
+        } else if (dayDiff > 1) {
+          dayBadge = `<span class="day-indicator day-ahead">+${dayDiff}d</span>`;
+        } else if (dayDiff < -1) {
+          dayBadge = `<span class="day-indicator day-behind">${dayDiff}d</span>`;
+        }
+
+        const card = document.createElement('div');
+        card.className = 'zone-card';
+        card.innerHTML = `
+          <div class="zone-info">
+            <div class="zone-name">${city}${dayBadge}</div>
+            <div class="zone-region">${region}</div>
+            <div class="zone-offset">${offset}</div>
+          </div>
+          <div class="zone-time">
+            <div class="zone-time-main">${timeStr}</div>
+            <div class="zone-time-date">${dateLabel}</div>
+          </div>
+          <button class="remove-btn" data-tz="${tz}" title="Remove">\u00d7</button>
+        `;
+        zoneGrid.appendChild(card);
+      }
+
+      zoneGrid.querySelectorAll('.remove-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          targetZones = targetZones.filter(t => t !== btn.dataset.tz);
+          render();
+        });
+      });
+    }
+
+    // ── Event listeners ────────────────────────────────
+    hoursInput.addEventListener('input', () => {
+      let v = parseInt(hoursInput.value);
+      if (isNaN(v) || v < 1) hoursInput.value = 1;
+      if (v > 12) hoursInput.value = 12;
+      render();
+    });
+
+    minutesInput.addEventListener('input', () => {
+      let v = parseInt(minutesInput.value);
+      if (isNaN(v) || v < 0) minutesInput.value = 0;
+      if (v > 59) minutesInput.value = 59;
+      if (minutesInput.value.length === 1) minutesInput.value = '0' + minutesInput.value;
+      render();
+    });
+
+    minutesInput.addEventListener('blur', () => {
+      minutesInput.value = String(parseInt(minutesInput.value) || 0).padStart(2, '0');
+      render();
+    });
+
+    ampmBtn.addEventListener('click', () => {
+      isAM = !isAM;
+      ampmBtn.textContent = isAM ? 'AM' : 'PM';
+      render();
+    });
+
+    sourceTzSelect.addEventListener('change', () => {
+      sourceTz = sourceTzSelect.value;
+      render();
+    });
+
+    nowBtn.addEventListener('click', () => {
+      const now = new Date();
+      const timeStr = now.toLocaleString('en-US', { timeZone: sourceTz, hour: 'numeric', minute: '2-digit', hour12: true });
+      const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+      if (match) {
+        hoursInput.value = match[1];
+        minutesInput.value = match[2];
+        isAM = match[3].toUpperCase() === 'AM';
+        ampmBtn.textContent = isAM ? 'AM' : 'PM';
+      }
+      render();
+    });
+
+    // ── Theme ───────────────────────────────────────────
+    window.SlopOS?.on?.('themechange', () => {});
+
+    // ── Init ───────────────────────────────────────────
+    populateSourceSelect();
+    populateRegionSelect();
+
+    (function init() {
+      const now = new Date();
+      const timeStr = now.toLocaleString('en-US', { timeZone: sourceTz, hour: 'numeric', minute: '2-digit', hour12: true });
+      const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+      if (match) {
+        hoursInput.value = match[1];
+        minutesInput.value = match[2].padStart(2, '0');
+        isAM = match[3].toUpperCase() === 'AM';
+        ampmBtn.textContent = isAM ? 'AM' : 'PM';
+      }
+      render();
+    })();
+  </script>
+</body>
+</html>
