@@ -1,0 +1,6 @@
+{
+  "name": "Stock Tracker",
+  "description": "Track stocks with interactive charts and daily data",
+  "authenticated": true,
+  "tags": "finance, charts, stocks, investing"
+}
