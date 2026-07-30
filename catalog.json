@@ -11,6 +11,12 @@
       "name": "Sudoku",
       "folder": "sudoku",
       "description": "App pushed from SlopOS"
+    },
+    {
+      "id": "xo2xauccuuk3",
+      "name": "Time Zone Converter",
+      "folder": "time-zone-converter",
+      "description": "App pushed from SlopOS"
     }
   ]
 }
