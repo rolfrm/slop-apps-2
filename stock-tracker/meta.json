@@ -1,6 +1,6 @@
 {
-  "name": "Stock Tracker",
-  "description": "Track stocks with interactive charts and daily data",
-  "authenticated": true,
-  "tags": "finance, charts, stocks, investing"
+  "name": "Sudoku",
+  "color": "#1e3a5f",
+  "description": "Classic Sudoku puzzle with 5 difficulty levels. Check your answers and track your progress.",
+  "tags": "game, puzzle, sudoku, logic, brain"
 }
