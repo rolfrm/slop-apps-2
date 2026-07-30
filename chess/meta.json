@@ -1,0 +1,6 @@
+{
+  "name": "Chess",
+  "description": "Play chess against an AI opponent with alpha-beta search",
+  "authenticated": false,
+  "tags": ["games", "chess", "strategy"]
+}
