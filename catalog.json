@@ -29,6 +29,12 @@
       "name": "Forest Walk",
       "folder": "forest-walk",
       "description": "App pushed from SlopOS"
+    },
+    {
+      "id": "fju40s659hz2",
+      "name": "FPS Prototype",
+      "folder": "fps-prototype",
+      "description": "App pushed from SlopOS"
     }
   ]
 }
