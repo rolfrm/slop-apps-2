@@ -1,0 +1,6 @@
+{
+  "name": "FPS Prototype",
+  "description": "A first-person shooter prototype built with Three.js — aim, shoot targets, track your score.",
+  "authenticated": false,
+  "tags": ["game", "3d", "three.js", "fps"]
+}
