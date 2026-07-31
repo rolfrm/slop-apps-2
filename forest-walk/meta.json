@@ -1,0 +1,6 @@
+{
+  "name": "Forest Walk",
+  "description": "An infinite 2D side-scroller through a procedurally generated forest with hills, trees, birds, and insects.",
+  "authenticated": false,
+  "tags": ["game", "forest", "side-scroller", "procedural"]
+}
