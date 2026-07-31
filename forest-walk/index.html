@@ -1,0 +1,1155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <link rel="icon" type="image/svg+xml" href="./icon.svg">
+  <title>Forest Walk</title>
+  <script src="/slop-os.js"></script>
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      overflow: hidden;
+      background: #0f1923;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    canvas {
+      display: block;
+      image-rendering: auto;
+    }
+
+    #ui {
+      position: fixed;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 12px;
+      z-index: 10;
+    }
+
+    .btn {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.25);
+      background: rgba(15,25,35,0.8);
+      color: #e0e8f0;
+      font-size: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      backdrop-filter: blur(8px);
+      transition: background 0.15s;
+    }
+    .btn:active { background: rgba(56,189,248,0.3); }
+    .btn.jump { width: 72px; height: 72px; font-size: 18px; font-weight: 700; }
+
+    #info {
+      position: fixed;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #e0e8f0;
+      font-family: system-ui, sans-serif;
+      font-size: 13px;
+      background: rgba(15,25,35,0.75);
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1px solid rgba(255,255,255,0.15);
+      backdrop-filter: blur(6px);
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    @media (min-width: 768px) {
+      #ui { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="info">🌲 Distance: 0m</div>
+  <canvas id="game"></canvas>
+  <div id="ui">
+    <button class="btn" id="btnLeft">◀</button>
+    <button class="btn jump" id="btnJump">▲<br>JUMP</button>
+    <button class="btn" id="btnRight">▶</button>
+  </div>
+
+<script>
+(function() {
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const info = document.getElementById('info');
+
+let W, H;
+
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// --- THEME COLORS ---
+function getTheme() {
+  const style = getComputedStyle(document.documentElement);
+  return {
+    skyTop: style.getPropertyValue('--sl-accent') || '#7dd3fc',
+    skyBot: style.getPropertyValue('--sl-surface') || '#0f1923',
+    text: style.getPropertyValue('--sl-text') || '#e0e8f0',
+  };
+}
+let theme = getTheme();
+window.SlopOS && window.SlopOS.on('themechange', () => { theme = getTheme(); });
+
+// --- CONSTANTS ---
+const GRAVITY = 0.6;
+const PLAYER_SPEED = 3.5;
+const JUMP_VEL = -9;
+const GROUND_Y_RATIO = 0.7;
+
+// --- NOISE / TERRAIN ---
+function hash(x) {
+  let h = x * 374761393 + 1779033703;
+  h = (h ^ (h >> 13)) * 1274126177;
+  return (h ^ (h >> 16)) / 2147483648;
+}
+
+function smoothNoise(x) {
+  const ix = Math.floor(x);
+  const fx = x - ix;
+  const a = hash(ix);
+  const b = hash(ix + 1);
+  return a * (1 - fx) + b * fx;
+}
+
+function terrainHeight(x) {
+  let h = 0;
+  h += smoothNoise(x * 0.003) * 80;
+  h += smoothNoise(x * 0.007 + 100) * 40;
+  h += smoothNoise(x * 0.015 + 200) * 25;
+  h += smoothNoise(x * 0.03 + 300) * 12;
+  return h;
+}
+
+// --- SEEDED RANDOM (for deterministic chunks) ---
+function mulberry32(a) {
+  return function() {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+// --- WORLD CHUNKS ---
+const CHUNK_SIZE = 600;
+const CHUNK_KEEP = 4;
+
+// Generates terrain points & features for a chunk
+function generateChunk(chunkIdx) {
+  const x0 = chunkIdx * CHUNK_SIZE;
+  const rng = mulberry32(chunkIdx * 0x9E3779B9 >>> 0);
+
+  // terrain sample points
+  const terrain = [];
+  const step = 8;
+  for (let x = 0; x <= CHUNK_SIZE; x += step) {
+    const wx = x0 + x;
+    terrain.push({ x, wx, h: terrainHeight(wx) });
+  }
+
+  // trees
+  const trees = [];
+  const numTrees = 25 + Math.floor(rng() * 15);
+  for (let i = 0; i < numTrees; i++) {
+    const localX = rng() * CHUNK_SIZE;
+    const wx = x0 + localX;
+    const th = terrainHeight(wx);
+    // only place trees above certain ground level, avoid very steep slopes
+    const treeType = rng() < 0.5 ? 'pine' : (rng() < 0.6 ? 'oak' : 'birch');
+    const hMult = treeType === 'pine' ? 1.6 : (treeType === 'oak' ? 1.0 : 0.85);
+    trees.push({
+      localX,
+      baseY: th,
+      type: treeType,
+      scale: 0.7 + rng() * 0.8,
+    });
+  }
+
+  // tall grass patches
+  const grassPatches = [];
+  const numGrass = 18 + Math.floor(rng() * 20);
+  for (let i = 0; i < numGrass; i++) {
+    const localX = rng() * CHUNK_SIZE;
+    const wx = x0 + localX;
+    grassPatches.push({
+      localX,
+      baseY: terrainHeight(wx),
+      blades: 4 + Math.floor(rng() * 8),
+      phase: rng() * Math.PI * 2,
+    });
+  }
+
+  // flowers
+  const flowers = [];
+  const numFlowers = 8 + Math.floor(rng() * 10);
+  for (let i = 0; i < numFlowers; i++) {
+    const localX = rng() * CHUNK_SIZE;
+    const wx = x0 + localX;
+    flowers.push({
+      localX,
+      baseY: terrainHeight(wx),
+      color: rng() < 0.33 ? '#facc15' : (rng() < 0.5 ? '#f472b6' : '#a78bfa'),
+      size: 2 + rng() * 3,
+    });
+  }
+
+  return { chunkIdx, terrain, trees, grassPatches, flowers };
+}
+
+// --- PLAYER ---
+const player = {
+  x: 200,
+  y: 0,
+  vx: 0,
+  vy: 0,
+  width: 24,
+  height: 40,
+  onGround: false,
+  facing: 1,
+  frame: 0,
+  frameTimer: 0,
+};
+
+// spawn player on terrain
+player.y = H * GROUND_Y_RATIO - terrainHeight(player.x) - player.height;
+
+// --- INPUT ---
+const keys = {};
+window.addEventListener('keydown', e => { keys[e.key] = true; e.preventDefault(); });
+window.addEventListener('keyup', e => { keys[e.key] = false; e.preventDefault(); });
+
+// Mobile buttons
+const btnLeft = document.getElementById('btnLeft');
+const btnRight = document.getElementById('btnRight');
+const btnJump = document.getElementById('btnJump');
+
+let mobileLeft = false, mobileRight = false;
+
+function setupBtn(btn) {
+  btn.addEventListener('pointerdown', e => { e.preventDefault();
+    if (btn === btnLeft) mobileLeft = true;
+    if (btn === btnRight) mobileRight = true;
+    if (btn === btnJump) { keys[' '] = true; keys['ArrowUp'] = true; }
+  });
+  btn.addEventListener('pointerup', e => { e.preventDefault();
+    if (btn === btnLeft) mobileLeft = false;
+    if (btn === btnRight) mobileRight = false;
+    if (btn === btnJump) { keys[' '] = false; keys['ArrowUp'] = false; }
+  });
+  btn.addEventListener('pointerleave', e => {
+    if (btn === btnLeft) mobileLeft = false;
+    if (btn === btnRight) mobileRight = false;
+    if (btn === btnJump) { keys[' '] = false; keys['ArrowUp'] = false; }
+  });
+}
+setupBtn(btnLeft);
+setupBtn(btnRight);
+setupBtn(btnJump);
+
+// --- BIRDS ---
+const birds = [];
+const MAX_BIRDS = 8;
+
+function spawnBird() {
+  if (birds.length >= MAX_BIRDS) return;
+  const fromLeft = Math.random() < 0.5;
+  birds.push({
+    x: fromLeft ? player.x - W : player.x + W + 200,
+    y: 60 + Math.random() * (H * 0.35),
+    vx: (fromLeft ? 1 : -1) * (0.4 + Math.random() * 1.2),
+    vy: 0,
+    wingPhase: Math.random() * Math.PI * 2,
+    wingSpeed: 0.08 + Math.random() * 0.1,
+    size: 6 + Math.random() * 5,
+    type: Math.random() < 0.6 ? 'sparrow' : 'crow',
+  });
+}
+
+// --- INSECTS ---
+const insects = [];
+const MAX_INSECTS = 12;
+
+function spawnInsect() {
+  if (insects.length >= MAX_INSECTS) return;
+  const type = Math.random() < 0.5 ? 'butterfly' : 'dragonfly';
+  insects.push({
+    x: player.x + (Math.random() - 0.5) * W * 1.5,
+    y: 80 + Math.random() * (H * 0.55),
+    vx: (Math.random() - 0.5) * 1.5,
+    vy: (Math.random() - 0.5) * 0.8,
+    wingPhase: Math.random() * Math.PI * 2,
+    wingSpeed: 0.12 + Math.random() * 0.15,
+    size: 3 + Math.random() * 5,
+    type,
+    turnTimer: 40 + Math.random() * 100,
+  });
+}
+
+// --- PARTICLE EFFECTS (dust when walking) ---
+const particles = [];
+
+function spawnDust(x, y) {
+  for (let i = 0; i < 3; i++) {
+    particles.push({
+      x: x + (Math.random() - 0.5) * 10,
+      y: y + Math.random() * 4,
+      vx: (Math.random() - 0.5) * 0.5,
+      vy: -(Math.random() * 1.5 + 0.5),
+      life: 1,
+      decay: 0.03 + Math.random() * 0.04,
+      size: 1.5 + Math.random() * 2,
+    });
+  }
+}
+
+// --- CHUNK MANAGEMENT ---
+const chunks = new Map();
+let lastChunkCheck = -999;
+
+function getOrCreateChunk(idx) {
+  if (!chunks.has(idx)) {
+    chunks.set(idx, generateChunk(idx));
+    // Cull old chunks
+    const keys = [...chunks.keys()];
+    if (keys.length > CHUNK_KEEP + 2) {
+      const minKey = Math.min(...keys);
+      if (Math.abs(minKey - idx) > 1) chunks.delete(minKey);
+    }
+  }
+  return chunks.get(idx);
+}
+
+function getTerrainY(wx) {
+  return H * GROUND_Y_RATIO - terrainHeight(wx);
+}
+
+function getTerrainSlope(wx) {
+  return -(terrainHeight(wx + 1) - terrainHeight(wx - 1)) / 2;
+}
+
+// --- UPDATE ---
+function update() {
+  const camX = player.x - W * 0.35; // player positioned 35% from left
+
+  // Input
+  let moveDir = 0;
+  if (keys['ArrowLeft'] || keys['a'] || keys['A'] || mobileLeft) moveDir = -1;
+  if (keys['ArrowRight'] || keys['d'] || keys['D'] || mobileRight) moveDir += 1;
+  moveDir = Math.max(-1, Math.min(1, moveDir));
+
+  const jumpPressed = keys[' '] || keys['ArrowUp'] || keys['w'] || keys['W'];
+
+  // Ground check
+  const groundY = getTerrainY(player.x);
+  const slope = getTerrainSlope(player.x);
+  const slopeY = groundY + slope * (player.x - Math.floor(player.x));
+
+  if (player.y + player.height >= slopeY && player.vy >= 0) {
+    player.y = slopeY - player.height;
+    player.vy = 0;
+    player.onGround = true;
+  } else {
+    player.onGround = false;
+  }
+
+  // Movement
+  if (player.onGround) {
+    if (moveDir !== 0) {
+      // Move along slope
+      player.vx = moveDir * PLAYER_SPEED;
+      player.y = Math.min(player.y, getTerrainY(player.x) - player.height + slope * (player.x - Math.floor(player.x)));
+    } else {
+      player.vx *= 0.8;
+    }
+    if (jumpPressed) {
+      player.vy = JUMP_VEL;
+      player.onGround = false;
+    }
+  } else {
+    player.vx = moveDir * PLAYER_SPEED * 0.85;
+  }
+
+  player.vy += GRAVITY;
+  player.x += player.vx;
+  player.y += player.vy;
+
+  // Clamp to ground while walking downhill
+  if (player.onGround) {
+    const gy = getTerrainY(player.x);
+    const sl = getTerrainSlope(player.x);
+    const sy = gy + sl * (player.x - Math.floor(player.x));
+    if (player.y + player.height > sy + 2) {
+      player.y = sy - player.height;
+    } else if (player.y + player.height < sy - 1) {
+      // walked off a cliff, fall
+      player.onGround = false;
+    }
+    // Keep on ground
+    player.vy = 0;
+    if (Math.abs(player.vx) > 0.1) {
+      const adjSlope = getTerrainSlope(player.x + player.vx);
+      player.y += adjSlope * player.vx * 0.5;
+    }
+  }
+
+  // Don't fall below screen
+  if (player.y > H + 200) {
+    player.y = H * GROUND_Y_RATIO - terrainHeight(player.x) - player.height;
+    player.vy = 0;
+    player.onGround = true;
+  }
+
+  // Facing
+  if (Math.abs(player.vx) > 0.2) player.facing = player.vx > 0 ? 1 : -1;
+  if (Math.abs(player.vx) > 0.3) {
+    player.frameTimer += Math.abs(player.vx) * 0.15;
+  }
+  player.frame = Math.floor(player.frameTimer) % 4;
+
+  // Dust
+  if (player.onGround && Math.abs(player.vx) > 0.5 && Math.random() < 0.4) {
+    spawnDust(player.x, player.y + player.height);
+  }
+
+  // Update birds
+  for (const bird of birds) {
+    bird.x += bird.vx;
+    bird.y += bird.vy + Math.sin(bird.wingPhase) * 0.3;
+    bird.wingPhase += bird.wingSpeed;
+    // Despawn if too far
+    if (Math.abs(bird.x - player.x) > W * 1.2) {
+      bird.dead = true;
+    }
+  }
+  // Remove dead birds
+  for (let i = birds.length - 1; i >= 0; i--) {
+    if (birds[i].dead) birds.splice(i, 1);
+  }
+  // Spawn new birds
+  if (Math.random() < 0.012) spawnBird();
+
+  // Update insects
+  for (const ins of insects) {
+    ins.x += ins.vx;
+    ins.y += ins.vy + Math.sin(ins.wingPhase) * 0.4;
+    ins.wingPhase += ins.wingSpeed;
+    ins.turnTimer--;
+    if (ins.turnTimer <= 0) {
+      ins.vx += (Math.random() - 0.5) * 1.0;
+      ins.vy += (Math.random() - 0.5) * 0.6;
+      ins.vx = Math.max(-2, Math.min(2, ins.vx));
+      ins.vy = Math.max(-1.2, Math.min(1.2, ins.vy));
+      ins.turnTimer = 50 + Math.random() * 120;
+    }
+    if (Math.abs(ins.x - player.x) > W * 1.3) ins.dead = true;
+  }
+  for (let i = insects.length - 1; i >= 0; i--) {
+    if (insects[i].dead) insects.splice(i, 1);
+  }
+  if (Math.random() < 0.018) spawnInsect();
+
+  // Update particles
+  for (const p of particles) {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life -= p.decay;
+  }
+  for (let i = particles.length - 1; i >= 0; i--) {
+    if (particles[i].life <= 0) particles.splice(i, 1);
+  }
+
+  // Ensure chunks
+  const curChunk = Math.floor(player.x / CHUNK_SIZE);
+  if (curChunk !== lastChunkCheck) {
+    lastChunkCheck = curChunk;
+    for (let i = curChunk - 2; i <= curChunk + 2; i++) {
+      getOrCreateChunk(i);
+    }
+  }
+}
+
+// --- RENDER ---
+function drawSky(camY) {
+  const skyShift = (camY || 0) * 0.03;
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#1e3a5f');
+  grad.addColorStop(0.3, '#3b6f9e');
+  grad.addColorStop(0.6, '#7cb8d4');
+  grad.addColorStop(0.85, '#b8dce8');
+  grad.addColorStop(1, '#c8e6c9');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  // Sun — shifts subtly with elevation
+  const sunX = W * 0.75;
+  const sunY = H * 0.18 + skyShift;
+  const sunGrad = ctx.createRadialGradient(sunX, sunY, 10, sunX, sunY, 120);
+  sunGrad.addColorStop(0, 'rgba(255,244,200,0.9)');
+  sunGrad.addColorStop(0.3, 'rgba(255,220,150,0.4)');
+  sunGrad.addColorStop(0.7, 'rgba(255,200,100,0.05)');
+  sunGrad.addColorStop(1, 'rgba(255,180,80,0)');
+  ctx.fillStyle = sunGrad;
+  ctx.fillRect(sunX - 120, sunY - 120, 240, 240);
+
+  // Clouds — shift subtly with sky
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  drawCloud(W * 0.15, H * 0.12 + skyShift, 0.6);
+  drawCloud(W * 0.5, H * 0.08 + skyShift, 0.8);
+  drawCloud(W * 0.3, H * 0.17 + skyShift, 0.5);
+  drawCloud(W * 0.7, H * 0.13 + skyShift, 0.7);
+}
+
+function drawCloud(cx, cy, scale) {
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(scale, scale);
+  ctx.beginPath();
+  ctx.arc(0, 0, 30, 0, Math.PI * 2);
+  ctx.arc(25, -8, 22, 0, Math.PI * 2);
+  ctx.arc(50, 0, 28, 0, Math.PI * 2);
+  ctx.arc(22, 8, 20, 0, Math.PI * 2);
+  ctx.arc(35, 4, 24, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+// --- EDGY MOUNTAINS (angular/stepped) ---
+function drawEdgyMountains(camX, camY, layerFactor, color, baseYOffset, scale, stepSize) {
+  const scrollX = camX * layerFactor;
+  const startX = -((scrollX % stepSize) + stepSize) % stepSize;
+  const yShift = camY * layerFactor;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(0, H);
+  for (let sx = startX - stepSize; sx < W + stepSize * 2; sx += stepSize) {
+    const wx = sx + scrollX;
+    const raw = smoothNoise(wx * 0.0008) * 70 + smoothNoise(wx * 0.0025 + 50) * 45 + smoothNoise(wx * 0.006 + 100) * 20;
+    const h = Math.round(raw / 12) * 12;
+    const y = H * GROUND_Y_RATIO + baseYOffset - h * scale + yShift;
+    ctx.lineTo(sx, y);
+  }
+  ctx.lineTo(W, H);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// --- WAVY FOREST CANOPY (tree-line silhouette) ---
+function drawForestCanopy(camX, camY, layerFactor, color, baseYOffset, bumpAmp, bumpFreq) {
+  const scrollX = camX * layerFactor;
+  const yShift = camY * layerFactor;
+  const step = 4;
+  const startX = -((scrollX % step) + step) % step;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(0, H);
+  const points = [];
+  for (let sx = startX - step; sx < W + step * 2; sx += step) {
+    const wx = sx + scrollX;
+    const baseH = smoothNoise(wx * 0.0015) * 35 + smoothNoise(wx * 0.004 + 70) * 20;
+    const bump = Math.abs(Math.sin(wx * bumpFreq + smoothNoise(wx * 0.02) * 2)) * bumpAmp;
+    const spike = (smoothNoise(wx * 0.08 + 200) > 0.55) ? bumpAmp * 0.7 : 0;
+    const h = baseH + bump + spike;
+    const y = H * GROUND_Y_RATIO + baseYOffset - h + yShift;
+    points.push({ sx, y });
+  }
+  // Draw smooth connected canopy
+  for (let i = 0; i < points.length; i++) {
+    ctx.lineTo(points[i].sx, points[i].y);
+  }
+  // Add tree trunk details as small vertical lines below the canopy
+  ctx.lineTo(W, H);
+  ctx.closePath();
+  ctx.fill();
+
+  // Draw individual tree silhouettes on top for definition
+  ctx.fillStyle = color;
+  for (let i = 0; i < points.length; i += 3) {
+    const wx = points[i].sx + scrollX;
+    if (smoothNoise(wx * 0.06 + 400) > 0.5) {
+      const h = 8 + smoothNoise(wx * 0.15 + 500) * 14;
+      ctx.beginPath();
+      ctx.moveTo(points[i].sx - 3, points[i].y);
+      ctx.lineTo(points[i].sx, points[i].y - h);
+      ctx.lineTo(points[i].sx + 3, points[i].y);
+      ctx.fill();
+    }
+  }
+}
+
+// --- BACKGROUND PARALLAX TREES ---
+const bgTrees = [];
+
+function generateBgTrees(seedOffset) {
+  // Generate deterministic background trees for a given world region
+  // These trees sit on the parallax hills and scroll at reduced rates
+  if (bgTrees.length > 0) return; // only generate once, they repeat
+  const rng = mulberry32(42);
+  for (let i = 0; i < 200; i++) {
+    bgTrees.push({
+      wx: rng() * 6000 - 1000,
+      baseYOffset: -30 + rng() * 60,
+      type: rng() < 0.5 ? 'pine' : (rng() < 0.6 ? 'oak' : 'birch'),
+      scale: 0.3 + rng() * 0.5,
+      layer: rng() < 0.5 ? 'bg' : 'mid', // bg=0.35 parallax, mid=0.7 parallax
+    });
+  }
+  bgTrees.sort((a, b) => a.wx - b.wx);
+}
+
+function drawParallaxTree(wx, baseY, type, scale, alpha) {
+  const s = scale;
+  ctx.globalAlpha = alpha;
+  ctx.save();
+  ctx.translate(wx, baseY);
+
+  const trunkW = 6 * s;
+  const trunkH = 30 * s;
+  ctx.fillStyle = type === 'birch' ? '#c4b8a0' : '#4a2e14';
+  ctx.fillRect(-trunkW / 2, -trunkH, trunkW, trunkH);
+
+  if (type === 'pine') {
+    const layers = 3;
+    for (let i = 0; i < layers; i++) {
+      const yOff = -trunkH - i * 16 * s;
+      const w = (26 - i * 4) * s;
+      const h = 20 * s;
+      ctx.fillStyle = `rgba(${20 + i * 8}, ${70 + i * 15}, ${35 + i * 10}, 1)`;
+      ctx.beginPath();
+      ctx.moveTo(0, yOff - h);
+      ctx.lineTo(-w, yOff);
+      ctx.lineTo(w, yOff);
+      ctx.closePath();
+      ctx.fill();
+    }
+  } else if (type === 'birch') {
+    ctx.fillStyle = 'rgba(100, 150, 60, 1)';
+    ctx.beginPath();
+    ctx.arc(0, -trunkH - 3 * s, 18 * s, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(-5 * s, -trunkH, 12 * s, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(7 * s, -trunkH - 4 * s, 10 * s, 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    ctx.fillStyle = 'rgba(40, 100, 30, 1)';
+    ctx.beginPath();
+    ctx.arc(0, -trunkH + 2 * s, 17 * s, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(-7 * s, -trunkH - 2 * s, 13 * s, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(8 * s, -trunkH - 1 * s, 11 * s, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
+function drawTerrain(camX, camY) {
+  const startX = -((camX % 8) + 8) % 8;
+  ctx.beginPath();
+  ctx.moveTo(0, H);
+  for (let sx = startX - 4; sx < W + 8; sx += 4) {
+    const wx = sx + camX;
+    const ty = getTerrainY(wx) - camY;
+    ctx.lineTo(sx, ty);
+  }
+  ctx.lineTo(W, H);
+  ctx.closePath();
+
+  const groundGrad = ctx.createLinearGradient(0, H * GROUND_Y_RATIO - 40 - camY, 0, H);
+  groundGrad.addColorStop(0, '#4a7c3f');
+  groundGrad.addColorStop(0.3, '#3d6b34');
+  groundGrad.addColorStop(0.7, '#5c4033');
+  groundGrad.addColorStop(1, '#3b2a1f');
+  ctx.fillStyle = groundGrad;
+  ctx.fill();
+}
+
+function drawTree(wx, baseY, type, scale) {
+  const sx = wx;
+  const sy = baseY;
+  const s = scale;
+
+  ctx.save();
+  ctx.translate(sx, sy);
+
+  // Trunk
+  const trunkW = 6 * s;
+  const trunkH = 30 * s;
+  ctx.fillStyle = type === 'birch' ? '#d4c5a9' : '#5c3a1e';
+  ctx.fillRect(-trunkW / 2, -trunkH, trunkW, trunkH);
+
+  if (type === 'pine') {
+    // Pine tree — layers of triangles
+    const layers = 4;
+    for (let i = 0; i < layers; i++) {
+      const yOff = -trunkH - i * 18 * s;
+      const w = (30 - i * 5) * s;
+      const h = 24 * s;
+      ctx.fillStyle = i === layers - 1 ? '#1a5c2a' : (i === layers - 2 ? '#1f6e33' : '#238636');
+      ctx.beginPath();
+      ctx.moveTo(0, yOff - h);
+      ctx.lineTo(-w, yOff);
+      ctx.lineTo(w, yOff);
+      ctx.closePath();
+      ctx.fill();
+    }
+  } else if (type === 'birch') {
+    // Birch — round canopy
+    ctx.fillStyle = '#7ab648';
+    ctx.beginPath();
+    ctx.arc(0, -trunkH - 5 * s, 22 * s, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#8cc654';
+    ctx.beginPath();
+    ctx.arc(-6 * s, -trunkH - 2 * s, 14 * s, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(8 * s, -trunkH - 6 * s, 12 * s, 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    // Oak — large rounded canopy
+    ctx.fillStyle = '#2d6a1e';
+    ctx.beginPath();
+    ctx.arc(0, -trunkH + 2 * s, 20 * s, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#3a8528';
+    ctx.beginPath();
+    ctx.arc(-8 * s, -trunkH - 4 * s, 16 * s, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(9 * s, -trunkH - 2 * s, 14 * s, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#449932';
+    ctx.beginPath();
+    ctx.arc(3 * s, -trunkH - 10 * s, 12 * s, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+function drawTallGrass(wx, baseY, blades, phase) {
+  const sx = wx;
+  const sy = baseY;
+  ctx.save();
+  for (let i = 0; i < blades; i++) {
+    const bx = sx + (i - blades / 2) * 6 + (Math.sin(phase + i * 0.7) * 3);
+    const bh = 10 + Math.sin(phase + i * 1.3) * 5 + i * 2;
+    const sway = Math.sin(Date.now() * 0.002 + phase + i) * 2;
+    ctx.strokeStyle = '#5a8f3c';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(bx, sy);
+    ctx.quadraticCurveTo(bx + sway - 2, sy - bh * 0.5, bx + sway, sy - bh);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawFlower(wx, baseY, color, size) {
+  const sx = wx;
+  const sy = baseY;
+  ctx.save();
+  // Stem
+  ctx.strokeStyle = '#4a7c3f';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(sx, sy);
+  ctx.lineTo(sx - 2, sy - 12);
+  ctx.stroke();
+  // Petals
+  ctx.fillStyle = color;
+  for (let a = 0; a < 5; a++) {
+    const angle = (a / 5) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.arc(sx - 2 + Math.cos(angle) * size * 0.7, sy - 12 + Math.sin(angle) * size * 0.7, size * 0.55, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Center
+  ctx.fillStyle = '#fde047';
+  ctx.beginPath();
+  ctx.arc(sx - 2, sy - 12, size * 0.35, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawBird(bird, camX, camY) {
+  const sx = bird.x - camX;
+  const sy = bird.y - camY * 0.2;
+  if (sx < -40 || sx > W + 40) return;
+
+  const wingUp = Math.sin(bird.wingPhase) > 0;
+  const s = bird.size;
+
+  ctx.save();
+  ctx.translate(sx, sy);
+
+  // Body
+  ctx.fillStyle = bird.type === 'crow' ? '#2d2d2d' : '#8b6914';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, s * 0.8, s * 0.35, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Wings
+  ctx.strokeStyle = bird.type === 'crow' ? '#1a1a1a' : '#6b4f12';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  if (wingUp) {
+    ctx.moveTo(-s * 0.3, -s * 0.1);
+    ctx.quadraticCurveTo(s * 0.1, -s * 0.8, s * 0.6, -s * 0.25);
+  } else {
+    ctx.moveTo(-s * 0.3, 0);
+    ctx.quadraticCurveTo(s * 0.1, s * 0.7, s * 0.6, s * 0.15);
+  }
+  ctx.stroke();
+
+  // Tail
+  ctx.beginPath();
+  ctx.moveTo(-s * 0.7, -s * 0.1);
+  ctx.lineTo(-s * 1.2, -s * 0.3);
+  ctx.lineTo(-s * 0.9, s * 0.05);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawInsect(ins, camX, camY) {
+  const sx = ins.x - camX;
+  const sy = ins.y - camY * 0.25;
+  if (sx < -30 || sx > W + 30) return;
+
+  const wingUp = Math.sin(ins.wingPhase) > 0;
+  const s = ins.size;
+
+  ctx.save();
+  ctx.translate(sx, sy);
+
+  // Body
+  ctx.fillStyle = ins.type === 'butterfly' ? '#f59e0b' : '#38bdf8';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, s * 0.5, s * 0.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Wings
+  const wingY = wingUp ? -s * 0.35 : s * 0.2;
+  ctx.fillStyle = ins.type === 'butterfly' ? 'rgba(251,191,36,0.6)' : 'rgba(125,211,252,0.5)';
+  ctx.beginPath();
+  ctx.ellipse(s * 0.1, wingY, s * 0.45, s * 0.3, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(-s * 0.1, wingY, s * 0.4, s * 0.28, 0.3, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawPlayer(camX, camY) {
+  const sx = player.x - camX;
+  const sy = player.y - camY;
+  const facing = player.facing;
+
+  ctx.save();
+  ctx.translate(sx + player.width / 2, sy);
+
+  // Shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.2)';
+  ctx.beginPath();
+  ctx.ellipse(0, player.height - 2, player.width / 2 + 2, 3, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.scale(facing, 1);
+
+  // Legs (animated)
+  const legSwing = player.onGround ? Math.sin(player.frameTimer * 1.2) * 6 : 2;
+  ctx.fillStyle = '#4a3728';
+  // Left leg
+  ctx.fillRect(-6, player.height - 14, 6, 14);
+  // Right leg
+  ctx.fillRect(0, player.height - 14 + legSwing * 0.5, 6, 14 - legSwing * 0.5);
+
+  // Body
+  ctx.fillStyle = '#2d6a9f';
+  ctx.fillRect(-8, player.height - 26, 16, 14);
+
+  // Arms
+  ctx.fillStyle = '#d4a574';
+  const armSwing = player.onGround ? Math.sin(player.frameTimer * 1.2 + Math.PI) * 4 : 1;
+  ctx.fillRect(-11, player.height - 26 + armSwing, 4, 12);
+  ctx.fillRect(7, player.height - 26 - armSwing, 4, 12);
+
+  // Head
+  ctx.fillStyle = '#e8c59a';
+  ctx.beginPath();
+  ctx.arc(0, player.height - 31, 8, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Hair
+  ctx.fillStyle = '#3b2210';
+  ctx.beginPath();
+  ctx.arc(0, player.height - 33, 8, Math.PI, Math.PI * 2);
+  ctx.fill();
+
+  // Eyes
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(3, player.height - 32, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#111';
+  ctx.beginPath();
+  ctx.arc(4, player.height - 32, 1.2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Hat (beanie)
+  ctx.fillStyle = '#c2410c';
+  ctx.beginPath();
+  ctx.arc(0, player.height - 35, 7, Math.PI, Math.PI * 2);
+  ctx.fill();
+  ctx.fillRect(-7, player.height - 36, 14, 4);
+
+  ctx.restore();
+}
+
+function drawParticles(camX, camY) {
+  for (const p of particles) {
+    const sx = p.x - camX;
+    const sy = p.y - camY;
+    ctx.fillStyle = `rgba(180,160,140,${p.life * 0.6})`;
+    ctx.beginPath();
+    ctx.arc(sx, sy, p.size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function render() {
+  const camX = smoothCam.x;
+  const camY = smoothCam.y;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // --- LAYER 0: Sky (parallax 0.03 — barely moves) ---
+  drawSky(camY);
+
+  // --- LAYER 1: Far edgy mountains (parallax 0.08) ---
+  drawEdgyMountains(camX, camY, 0.08, 'rgba(70,85,110,0.5)', -50, 1.0, 14);
+
+  // --- LAYER 2: Distant forest canopy (parallax 0.14) ---
+  drawForestCanopy(camX, camY, 0.14, 'rgba(50,75,55,0.45)', -5, 30, 0.025);
+
+  // --- LAYER 3: Mid edgy mountains (parallax 0.22) ---
+  drawEdgyMountains(camX, camY, 0.22, 'rgba(55,80,50,0.5)', 10, 0.85, 10);
+
+  // --- LAYER 4: Background parallax trees (parallax 0.35) ---
+  generateBgTrees(0);
+  const bgFactor = 0.35;
+  const bgScrollX = camX * bgFactor;
+  const bgYShift = camY * bgFactor;
+  for (const bt of bgTrees) {
+    if (bt.layer !== 'bg') continue;
+    const sx = bt.wx - bgScrollX;
+    let wrapX = ((sx % 6000) + 6000) % 6000 - 1000;
+    if (wrapX < -120 || wrapX > W + 120) continue;
+    const hillH = smoothNoise(bt.wx * 0.0015) * 35 + smoothNoise(bt.wx * 0.004 + 70) * 20;
+    const baseY = H * GROUND_Y_RATIO + bt.baseYOffset - hillH * 0.85 + bgYShift;
+    drawParallaxTree(wrapX, baseY, bt.type, bt.scale, 0.55);
+  }
+
+  // --- LAYER 5: Near forest canopy (parallax 0.50) ---
+  drawForestCanopy(camX, camY, 0.50, 'rgba(35,60,30,0.6)', 18, 22, 0.04);
+
+  // --- LAYER 6: Mid-ground parallax trees (parallax 0.70) ---
+  const midFactor = 0.70;
+  const midScrollX = camX * midFactor;
+  const midYShift = camY * midFactor;
+  for (const bt of bgTrees) {
+    if (bt.layer !== 'mid') continue;
+    const sx = bt.wx - midScrollX;
+    let wrapX = ((sx % 6000) + 6000) % 6000 - 1000;
+    if (wrapX < -120 || wrapX > W + 120) continue;
+    const hillH = smoothNoise(bt.wx * 0.0015) * 35 + smoothNoise(bt.wx * 0.004 + 70) * 20;
+    const baseY = H * GROUND_Y_RATIO + bt.baseYOffset - hillH * 0.85 + midYShift;
+    drawParallaxTree(wrapX, baseY, bt.type, bt.scale * 1.3, 0.75);
+  }
+
+  // --- LAYER 7: Terrain (parallax 1.0) ---
+  drawTerrain(camX, camY);
+
+  // --- LAYER 8: Foreground world features (parallax 1.0) ---
+  const firstChunk = Math.floor((camX - 100) / CHUNK_SIZE);
+  const lastChunk = Math.floor((camX + W + 100) / CHUNK_SIZE);
+
+  const features = [];
+  for (let ci = firstChunk; ci <= lastChunk; ci++) {
+    const chunk = getOrCreateChunk(ci);
+    for (const t of chunk.trees) {
+      const wx = chunk.chunkIdx * CHUNK_SIZE + t.localX;
+      features.push({ type: 'tree', wx, baseY: getTerrainY(wx) - camY, treeType: t.type, scale: t.scale });
+    }
+    for (const g of chunk.grassPatches) {
+      const wx = chunk.chunkIdx * CHUNK_SIZE + g.localX;
+      features.push({ type: 'grass', wx, baseY: getTerrainY(wx) - camY, blades: g.blades, phase: g.phase });
+    }
+    for (const f of chunk.flowers) {
+      const wx = chunk.chunkIdx * CHUNK_SIZE + f.localX;
+      features.push({ type: 'flower', wx, baseY: getTerrainY(wx) - camY, color: f.color, size: f.size });
+    }
+  }
+
+  features.sort((a, b) => a.baseY - b.baseY);
+
+  for (const feat of features) {
+    const sx = feat.wx - camX;
+    if (sx < -80 || sx > W + 80) continue;
+    if (feat.type === 'tree') {
+      drawTree(sx, feat.baseY, feat.treeType, feat.scale);
+    } else if (feat.type === 'grass') {
+      drawTallGrass(sx, feat.baseY, feat.blades, feat.phase);
+    } else if (feat.type === 'flower') {
+      drawFlower(sx, feat.baseY, feat.color, feat.size);
+    }
+  }
+
+  // --- LAYER 9: Foreground bushes (parallax 1.15) ---
+  drawForegroundBushes(camX, camY);
+
+  // --- Wildlife behind player ---
+  for (const bird of birds) {
+    if (bird.y < player.y + player.height * 0.3) drawBird(bird, camX, camY);
+  }
+  for (const ins of insects) {
+    if (ins.y < player.y + player.height * 0.4) drawInsect(ins, camX, camY);
+  }
+
+  // --- Player ---
+  drawPlayer(camX, camY);
+
+  // --- Wildlife in front ---
+  for (const bird of birds) {
+    if (bird.y >= player.y + player.height * 0.3) drawBird(bird, camX, camY);
+  }
+  for (const ins of insects) {
+    if (ins.y >= player.y + player.height * 0.4) drawInsect(ins, camX, camY);
+  }
+
+  // --- Particles ---
+  drawParticles(camX, camY);
+
+  // --- HUD ---
+  info.textContent = `🌲 Distance: ${Math.floor(player.x / 10)}m`;
+}
+
+// --- FOREGROUND BUSHES (fast parallax for depth) ---
+function drawForegroundBushes(camX, camY) {
+  const layerFactor = 1.15;
+  const scrollX = camX * layerFactor;
+  const yShift = camY * layerFactor;
+  const step = 120;
+  const startX = -((scrollX % step) + step) % step;
+
+  for (let sx = startX - step; sx < W + step; sx += step) {
+    const wx = sx + scrollX;
+    const rng = mulberry32(Math.floor(wx / 80) * 0xDEADBEEF >>> 0);
+    const ty = getTerrainY(wx * (1 / layerFactor)) - camY * layerFactor;
+    const bx = sx;
+    const by = ty + 8;
+
+    if (rng() < 0.4) continue;
+
+    const bushSize = 4 + rng() * 8;
+    ctx.fillStyle = 'rgba(30,70,25,0.8)';
+    ctx.beginPath();
+    ctx.arc(bx, by - bushSize * 0.6, bushSize, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(40,90,30,0.7)';
+    ctx.beginPath();
+    ctx.arc(bx - bushSize * 0.5, by - bushSize * 0.3, bushSize * 0.7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(bx + bushSize * 0.5, by - bushSize * 0.2, bushSize * 0.65, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Sometimes add a fern
+    if (rng() < 0.35) {
+      ctx.strokeStyle = '#3a7a28';
+      ctx.lineWidth = 1.5;
+      for (let f = 0; f < 3; f++) {
+        const angle = -0.8 + f * 0.5;
+        ctx.beginPath();
+        ctx.moveTo(bx, by - 2);
+        ctx.quadraticCurveTo(
+          bx + Math.cos(angle) * bushSize, by - bushSize,
+          bx + Math.cos(angle) * bushSize * 1.5, by - bushSize * 1.3
+        );
+        ctx.stroke();
+      }
+    }
+  }
+}
+
+// --- SMOOTHED CAMERA ---
+const smoothCam = { x: 200, y: 0 };
+
+function updateCamera() {
+  const targetX = player.x - W * 0.35;
+  const targetY = player.y - H * 0.55;
+  smoothCam.x += (targetX - smoothCam.x) * 0.12;
+  smoothCam.y += (targetY - smoothCam.y) * 0.12;
+}
+
+// --- GAME LOOP ---
+function gameLoop() {
+  update();
+  updateCamera();
+  render();
+  requestAnimationFrame(gameLoop);
+}
+
+// Initialize chunks around player
+for (let i = -2; i <= 2; i++) {
+  getOrCreateChunk(Math.floor(player.x / CHUNK_SIZE) + i);
+}
+
+// Initialize smoothed camera
+smoothCam.x = player.x - W * 0.35;
+smoothCam.y = player.y - H * 0.55;
+
+// Spawn initial wildlife
+for (let i = 0; i < 4; i++) spawnBird();
+for (let i = 0; i < 6; i++) spawnInsect();
+
+// Start
+requestAnimationFrame(gameLoop);
+
+})();
+</script>
+</body>
+</html>
