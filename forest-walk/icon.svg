@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#7dd3fc"/>
+      <stop offset="100%" stop-color="#bae6fd"/>
+    </linearGradient>
+    <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#4ade80"/>
+      <stop offset="100%" stop-color="#166534"/>
+    </linearGradient>
+  </defs>
+  <style>
+    @media (prefers-color-scheme: light) {
+      .sky-stop1 { stop-color: #7dd3fc; }
+      .sky-stop2 { stop-color: #bae6fd; }
+    }
+  </style>
+  <rect x="4" y="4" width="48" height="48" rx="10" fill="url(#sky)"/>
+  <!-- Mountains -->
+  <polygon points="8,38 20,20 32,38" fill="#94a3b8" opacity="0.6"/>
+  <polygon points="24,38 36,18 48,38" fill="#64748b" opacity="0.5"/>
+  <!-- Ground -->
+  <rect x="4" y="38" width="48" height="14" rx="0" fill="url(#ground)"/>
+  <!-- Tree trunks -->
+  <rect x="16" y="26" width="4" height="14" rx="1.5" fill="#78350f"/>
+  <rect x="36" y="24" width="3.5" height="16" rx="1.5" fill="#92400e"/>
+  <!-- Tree canopies -->
+  <polygon points="12,28 18,14 24,28" fill="#15803d"/>
+  <polygon points="14,22 18,8 22,22" fill="#16a34a"/>
+  <circle cx="38" cy="20" r="7" fill="#166534"/>
+  <circle cx="35" cy="16" r="5" fill="#22c55e"/>
+  <!-- Bird -->
+  <path d="M30 12 Q33 9 36 12" stroke="#475569" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+</svg>
