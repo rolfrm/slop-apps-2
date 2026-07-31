@@ -23,6 +23,12 @@
       "name": "Chess",
       "folder": "chess",
       "description": "App pushed from SlopOS"
+    },
+    {
+      "id": "7vl2yoarj4ny",
+      "name": "Forest Walk",
+      "folder": "forest-walk",
+      "description": "App pushed from SlopOS"
     }
   ]
 }
